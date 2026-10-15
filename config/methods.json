@@ -1,0 +1,134 @@
+[
+  {
+    "id": "cnn",
+    "name": "Convolutional Neural Network (CNN)",
+    "category": "Deep Learning / Vision",
+    "aliases": ["CNN", "CNNs", "ConvNet", "ConvNets", "Convolutional Neural Network", "Convolutional Neural Networks", "Convolutional Network"]
+  },
+  {
+    "id": "transformer",
+    "name": "Transformer",
+    "category": "Architectures / Sequence Models",
+    "aliases": ["Transformer", "Transformers", "Self-Attention", "Multi-Head Attention", "Attention Mechanism"]
+  },
+  {
+    "id": "vit",
+    "name": "Vision Transformer (ViT)",
+    "category": "Deep Learning / Vision",
+    "aliases": ["ViT", "ViTs", "Vision Transformer", "Vision Transformers"]
+  },
+  {
+    "id": "bert",
+    "name": "BERT",
+    "category": "Natural Language Processing",
+    "aliases": ["BERT", "RoBERTa", "DistilBERT", "Bidirectional Encoder Representations from Transformers"]
+  },
+  {
+    "id": "llm",
+    "name": "Large Language Model (LLM)",
+    "category": "Generative AI / NLP",
+    "aliases": ["LLM", "LLMs", "Large Language Model", "Large Language Models", "Foundation Model", "Foundation Models"]
+  },
+  {
+    "id": "yolo",
+    "name": "YOLO (You Only Look Once)",
+    "category": "Object Detection / Vision",
+    "aliases": ["YOLO", "You Only Look Once", "YOLOv5", "YOLOv7", "YOLOv8", "YOLOv9", "YOLOv10", "YOLOv11"]
+  },
+  {
+    "id": "gan",
+    "name": "Generative Adversarial Network (GAN)",
+    "category": "Generative Models",
+    "aliases": ["GAN", "GANs", "Generative Adversarial Network", "Generative Adversarial Networks", "CycleGAN", "StyleGAN"]
+  },
+  {
+    "id": "diffusion",
+    "name": "Diffusion Model",
+    "category": "Generative Models",
+    "aliases": ["Diffusion Model", "Diffusion Models", "DDPM", "Stable Diffusion", "Score-based Generative", "Denoising Diffusion"]
+  },
+  {
+    "id": "lstm",
+    "name": "Long Short-Term Memory (LSTM)",
+    "category": "Sequential / Recurrent Models",
+    "aliases": ["LSTM", "LSTMs", "Long Short-Term Memory", "BiLSTM", "Bidirectional LSTM"]
+  },
+  {
+    "id": "rnn",
+    "name": "Recurrent Neural Network (RNN)",
+    "category": "Sequential / Recurrent Models",
+    "aliases": ["RNN", "RNNs", "Recurrent Neural Network", "Recurrent Neural Networks", "GRU", "Gated Recurrent Unit"]
+  },
+  {
+    "id": "gnn",
+    "name": "Graph Neural Network (GNN)",
+    "category": "Graph Representation",
+    "aliases": ["GNN", "GNNs", "Graph Neural Network", "Graph Neural Networks", "Graph Convolutional Network", "GCN", "GAT", "Graph Attention Network"]
+  },
+  {
+    "id": "resnet",
+    "name": "ResNet (Residual Network)",
+    "category": "Deep Learning / Vision",
+    "aliases": ["ResNet", "ResNet-50", "ResNet-101", "Residual Network", "Residual Networks", "Skip Connection", "Skip Connections"]
+  },
+  {
+    "id": "reinforcement_learning",
+    "name": "Reinforcement Learning (RL)",
+    "category": "Decision & Control",
+    "aliases": ["Reinforcement Learning", "Deep Reinforcement Learning", "DRL", "Q-Learning", "Deep Q-Network", "DQN", "PPO", "Policy Gradient"]
+  },
+  {
+    "id": "xgboost",
+    "name": "Gradient Boosting / XGBoost",
+    "category": "Machine Learning / Tabular",
+    "aliases": ["XGBoost", "Gradient Boosting", "LightGBM", "CatBoost", "GBDT"]
+  },
+  {
+    "id": "svm",
+    "name": "Support Vector Machine (SVM)",
+    "category": "Machine Learning / Classifiers",
+    "aliases": ["SVM", "SVMs", "Support Vector Machine", "Support Vector Machines"]
+  },
+  {
+    "id": "random_forest",
+    "name": "Random Forest",
+    "category": "Machine Learning / Ensembles",
+    "aliases": ["Random Forest", "Random Forests", "Decision Forest"]
+  },
+  {
+    "id": "contrastive_learning",
+    "name": "Contrastive Learning",
+    "category": "Self-Supervised Learning",
+    "aliases": ["Contrastive Learning", "SimCLR", "CLIP", "Self-Supervised Learning", "MoCo"]
+  },
+  {
+    "id": "autoencoder",
+    "name": "Autoencoder / VAE",
+    "category": "Unsupervised / Representation",
+    "aliases": ["Autoencoder", "Autoencoders", "VAE", "Variational Autoencoder", "Variational Autoencoders"]
+  },
+  {
+    "id": "transfer_learning",
+    "name": "Transfer Learning & Fine-Tuning",
+    "category": "Learning Paradigms",
+    "aliases": ["Transfer Learning", "Fine-Tuning", "Pre-trained Model", "Pre-trained Models", "Fine-tuned"]
+  },
+  {
+    "id": "rag",
+    "name": "Retrieval-Augmented Generation (RAG)",
+    "category": "Knowledge Retrieval & Generation",
+    "aliases": ["RAG", "Retrieval-Augmented Generation", "Retrieval Augmented Generation", "Dense Retrieval"]
+  },
+  {
+    "id": "federated_learning",
+    "name": "Federated Learning",
+    "category": "Distributed & Privacy-Preserving",
+    "aliases": ["Federated Learning", "Federated Optimization", "Decentralized Learning"]
+  },
+  {
+    "id": "nerf",
+    "name": "Neural Radiance Fields (NeRF)",
+    "category": "3D Vision / Graphics",
+    "aliases": ["NeRF", "Neural Radiance Fields", "Neural Radiance Field", "3D Gaussian Splatting"]
+  }
+]

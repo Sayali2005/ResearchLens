@@ -1,0 +1,70 @@
+{
+  "group_a": {
+    "name": "Leading Global Universities and Labs",
+    "score": 1.0,
+    "keywords": [
+      "mit", "massachusetts institute of technology",
+      "stanford", "stanford university",
+      "berkeley", "university of california, berkeley",
+      "carnegie mellon", "cmu",
+      "oxford", "university of oxford",
+      "cambridge", "university of cambridge",
+      "harvard", "harvard university",
+      "eth zurich", "eth zürich",
+      "epfl",
+      "princeton", "princeton university",
+      "university of toronto", "toronto",
+      "columbia university",
+      "cornell", "cornell university",
+      "university of washington",
+      "mila", "vector institute", "max planck"
+    ],
+    "rors": [
+      "https://ror.org/00cvxb145",
+      "https://ror.org/0168oc816",
+      "https://ror.org/05dxps055",
+      "https://ror.org/044wf5t68"
+    ]
+  },
+  "group_b": {
+    "name": "Premier Indian Institutions",
+    "score": 0.90,
+    "keywords": [
+      "indian institute of technology", "iit bombay", "iit delhi",
+      "iit madras", "iit kanpur", "iit kharagpur", "iit roorkee",
+      "iit guwahati", "iit hyderabad",
+      "indian institute of science", "iisc", "iisc bangalore",
+      "international institute of information technology", "iiit hyderabad", "iiit bangalore", "iiit delhi",
+      "indian statistical institute", "isi kolkata",
+      "tata institute of fundamental research", "tifr",
+      "chennai mathematical institute", "cmi",
+      "aiims", "bits pilani"
+    ],
+    "rors": [
+      "https://ror.org/04gnjpq42",
+      "https://ror.org/04c4vkn15",
+      "https://ror.org/011666z98"
+    ]
+  },
+  "group_c": {
+    "name": "Industry Research Labs",
+    "score": 0.95,
+    "keywords": [
+      "google research", "google deepmind", "deepmind",
+      "meta ai", "fair", "meta platforms",
+      "microsoft research", "microsoft",
+      "openai",
+      "anthropic",
+      "amazon science", "amazon aws",
+      "apple machine learning", "apple",
+      "ibm research", "ibm",
+      "nvidia research", "nvidia",
+      "adobe research"
+    ],
+    "rors": [
+      "https://ror.org/028bf3y79",
+      "https://ror.org/03t59w264"
+    ]
+  },
+  "default_score": 0.25
+}

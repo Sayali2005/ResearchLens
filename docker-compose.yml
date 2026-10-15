@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  # MongoDB Atlas local replica / standalone
+  mongo:
+    image: mongo:7.0
+    container_name: researchlens-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Backend Service
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: researchlens-server
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017
+      - MONGODB_DATABASE=researchlens
+      - FRONTEND_URL=http://localhost
+      - DEV_MOCK=false
+      - CONTACT_EMAIL=researcher@example.org
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # React 19 Frontend Client (Nginx SPA + Reverse Proxy)
+  client:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    container_name: researchlens-client
+    ports:
+      - "80:80"
+      - "5173:80"
+    depends_on:
+      - server
+    restart: unless-stopped
+
+volumes:
+  mongo_data:

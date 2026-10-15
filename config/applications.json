@@ -1,0 +1,74 @@
+[
+  {
+    "id": "healthcare",
+    "name": "Healthcare & Medicine",
+    "query": "healthcare OR medicine OR clinical OR hospital",
+    "keywords": ["healthcare", "medicine", "clinical", "hospital", "patient"]
+  },
+  {
+    "id": "agriculture",
+    "name": "Agriculture & Farming",
+    "query": "agriculture OR farming OR crop OR harvest",
+    "keywords": ["agriculture", "farming", "crop", "livestock", "harvest"]
+  },
+  {
+    "id": "finance",
+    "name": "Finance & Banking",
+    "query": "finance OR banking OR fintech OR market",
+    "keywords": ["finance", "banking", "financial", "fintech", "stock market"]
+  },
+  {
+    "id": "education",
+    "name": "Education & E-Learning",
+    "query": "education OR learning OR student OR teaching",
+    "keywords": ["education", "e-learning", "pedagogy", "student", "classroom"]
+  },
+  {
+    "id": "cybersecurity",
+    "name": "Cybersecurity & Privacy",
+    "query": "cybersecurity OR malware OR cryptography OR intrusion",
+    "keywords": ["cybersecurity", "network security", "malware", "privacy", "intrusion detection"]
+  },
+  {
+    "id": "robotics",
+    "name": "Robotics & Automation",
+    "query": "robotics OR robot OR autonomous OR manipulator",
+    "keywords": ["robotics", "autonomous robots", "manipulator", "drones", "automation"]
+  },
+  {
+    "id": "manufacturing",
+    "name": "Manufacturing & Industry 4.0",
+    "query": "manufacturing OR industry OR machining OR factory",
+    "keywords": ["manufacturing", "smart factory", "industry 4.0", "machining", "assembly"]
+  },
+  {
+    "id": "energy",
+    "name": "Energy & Smart Grids",
+    "query": "energy OR smart grid OR renewable OR solar",
+    "keywords": ["energy", "smart grid", "renewable", "solar", "wind power"]
+  },
+  {
+    "id": "climate_environment",
+    "name": "Climate & Environment",
+    "query": "climate change OR environmental OR ecology OR emissions",
+    "keywords": ["climate change", "environment", "carbon emissions", "ecology", "sustainability"]
+  },
+  {
+    "id": "transportation",
+    "name": "Transportation & Logistics",
+    "query": "transportation OR traffic OR logistics OR vehicle",
+    "keywords": ["transportation", "traffic", "autonomous vehicles", "logistics", "urban transit"]
+  },
+  {
+    "id": "retail",
+    "name": "Retail & E-Commerce",
+    "query": "retail OR ecommerce OR customer OR supply chain",
+    "keywords": ["retail", "e-commerce", "supply chain", "recommendation", "consumer"]
+  },
+  {
+    "id": "social_media",
+    "name": "Social Media & Networks",
+    "query": "social media OR social network OR misinformation OR sentiment",
+    "keywords": ["social media", "social networks", "misinformation", "sentiment", "online communities"]
+  }
+]

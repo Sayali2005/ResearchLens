@@ -1,0 +1,10 @@
+{
+  "emerging_growth_threshold": 0.25,
+  "declining_growth_threshold": -0.10,
+  "min_last_year_count": 30,
+  "growth_window_years": 3,
+  "default_years_range": 10,
+  "default_top_topics": 15,
+  "exclude_current_year": true,
+  "description": "Deterministic analysis thresholds for ResearchLens trend calculations and opportunity scoring."
+}

@@ -1,0 +1,49 @@
+{
+  "tier_1": {
+    "name": "Top-tier AI & Computing Venues",
+    "score": 1.0,
+    "patterns": [
+      "neurips", "neural information processing systems",
+      "icml", "international conference on machine learning",
+      "iclr", "international conference on learning representations",
+      "cvpr", "computer vision and pattern recognition",
+      "iccv", "international conference on computer vision",
+      "eccv", "european conference on computer vision",
+      "acl", "association for computational linguistics",
+      "emnlp", "empirical methods in natural language processing",
+      "naacl",
+      "aaai", "association for the advancement of artificial intelligence",
+      "ijcai", "international joint conference on artificial intelligence",
+      "kdd", "knowledge discovery and data mining",
+      "sigir", "acm sigir",
+      "jmlr", "journal of machine learning research",
+      "tpami", "ieee transactions on pattern analysis",
+      "ieee transactions", "acm transactions"
+    ]
+  },
+  "tier_2": {
+    "name": "Strong Specialized Venues",
+    "score": 0.75,
+    "patterns": [
+      "wacv", "bmvc", "coling", "eacl", "cikm", "recsys",
+      "aistats", "uai", "interspeech", "icassp", "iros", "icra",
+      "corl", "nature machine intelligence", "nature communications",
+      "ieee journal", "computer speech & language"
+    ]
+  },
+  "tier_3": {
+    "name": "Recognized Conferences & Journals",
+    "score": 0.50,
+    "patterns": [
+      "pattern recognition", "neurocomputing", "neural networks",
+      "expert systems with applications", "knowledge-based systems",
+      "information sciences", "ieee access"
+    ]
+  },
+  "preprint": {
+    "name": "Preprints & Repositories",
+    "score": 0.35,
+    "patterns": ["arxiv", "biorxiv", "medrxiv"]
+  },
+  "default_score": 0.25
+}

@@ -1,0 +1,122 @@
+[
+  {
+    "id": "imagenet",
+    "name": "ImageNet",
+    "category": "Computer Vision",
+    "aliases": ["ImageNet", "ILSVRC", "ILSVRC2012", "ImageNet-1K", "ImageNet-21K"]
+  },
+  {
+    "id": "coco",
+    "name": "MS COCO",
+    "category": "Computer Vision",
+    "aliases": ["COCO", "MS COCO", "MS-COCO", "Common Objects in Context"]
+  },
+  {
+    "id": "mnist",
+    "name": "MNIST / Fashion-MNIST",
+    "category": "Computer Vision",
+    "aliases": ["MNIST", "Fashion-MNIST", "Fashion MNIST"]
+  },
+  {
+    "id": "cifar",
+    "name": "CIFAR-10 / CIFAR-100",
+    "category": "Computer Vision",
+    "aliases": ["CIFAR", "CIFAR-10", "CIFAR-100", "CIFAR10", "CIFAR100"]
+  },
+  {
+    "id": "plantvillage",
+    "name": "PlantVillage",
+    "category": "Agriculture / Vision",
+    "aliases": ["PlantVillage", "Plant Village", "PlantVillage dataset"]
+  },
+  {
+    "id": "squad",
+    "name": "SQuAD",
+    "category": "Natural Language Processing",
+    "aliases": ["SQuAD", "SQuAD 2.0", "Stanford Question Answering Dataset", "SQuAD v1.1", "SQuAD v2.0"]
+  },
+  {
+    "id": "glue",
+    "name": "GLUE / SuperGLUE",
+    "category": "Natural Language Processing",
+    "aliases": ["GLUE", "SuperGLUE", "GLUE benchmark", "General Language Understanding Evaluation"]
+  },
+  {
+    "id": "common_crawl",
+    "name": "Common Crawl",
+    "category": "Web Corpus / NLP",
+    "aliases": ["Common Crawl", "CommonCrawl", "C4 dataset", "Colossal Clean Crawled Corpus"]
+  },
+  {
+    "id": "mimic",
+    "name": "MIMIC (Clinical)",
+    "category": "Healthcare & Medicine",
+    "aliases": ["MIMIC", "MIMIC-III", "MIMIC-IV", "MIMIC III", "MIMIC IV", "PhysioNet"]
+  },
+  {
+    "id": "cityscapes",
+    "name": "Cityscapes",
+    "category": "Autonomous Driving / Vision",
+    "aliases": ["Cityscapes", "Cityscapes dataset"]
+  },
+  {
+    "id": "kitti",
+    "name": "KITTI Vision Benchmark",
+    "category": "Autonomous Driving / Vision",
+    "aliases": ["KITTI", "KITTI dataset", "KITTI Vision Benchmark"]
+  },
+  {
+    "id": "celeba",
+    "name": "CelebA",
+    "category": "Computer Vision",
+    "aliases": ["CelebA", "CelebFaces", "CelebFaces Attributes"]
+  },
+  {
+    "id": "librispeech",
+    "name": "LibriSpeech",
+    "category": "Speech & Audio",
+    "aliases": ["LibriSpeech", "Librispeech ASR"]
+  },
+  {
+    "id": "pascal_voc",
+    "name": "PASCAL VOC",
+    "category": "Computer Vision",
+    "aliases": ["PASCAL VOC", "PASCAL VOC 2012", "VOC2007", "VOC2012"]
+  },
+  {
+    "id": "imdb",
+    "name": "IMDb Sentiment",
+    "category": "Natural Language Processing",
+    "aliases": ["IMDb", "IMDb dataset", "IMDb movie reviews"]
+  },
+  {
+    "id": "pubmed",
+    "name": "PubMed / PMC",
+    "category": "Biomedical & Healthcare",
+    "aliases": ["PubMed", "PubMedQA", "PubMed Central", "PMC dataset", "BioASQ"]
+  },
+  {
+    "id": "open_images",
+    "name": "Open Images",
+    "category": "Computer Vision",
+    "aliases": ["Open Images", "OpenImages", "Open Images V6"]
+  },
+  {
+    "id": "chexpert",
+    "name": "CheXpert",
+    "category": "Healthcare & Medicine",
+    "aliases": ["CheXpert", "CheXpert dataset", "ChestX-ray14", "Chest X-ray"]
+  },
+  {
+    "id": "ade20k",
+    "name": "ADE20K",
+    "category": "Computer Vision",
+    "aliases": ["ADE20K", "ADE20K dataset"]
+  },
+  {
+    "id": "kaggle",
+    "name": "Kaggle Benchmark Datasets",
+    "category": "Data Science / Multimodal",
+    "aliases": ["Kaggle dataset", "Kaggle competition dataset", "Kaggle"]
+  }
+]
