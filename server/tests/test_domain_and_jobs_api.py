@@ -161,3 +161,20 @@ async def test_domain_analysis_job_and_endpoints():
     trends_data = trends_res.json()["data"]["trends"]
     assert len(trends_data) >= 2
     assert trends_data[0]["yearly_counts"]
+    assert "cagr" in trends_data[0]
+    assert "quadrant" in trends_data[0]
+
+    # 6. Check domain comparison endpoint
+    compare_res = client.get(f"/api/domains/compare?d1={domain_id}&d2=computer-vision")
+    assert compare_res.status_code == 200
+    comp_json = compare_res.json()
+    assert comp_json["success"] is True
+    assert "domain_1" in comp_json["data"]
+    assert "domain_2" in comp_json["data"]
+    assert "comparison" in comp_json["data"]
+
+    # 7. Check SSE stream endpoint
+    stream_res = client.get(f"/api/jobs/{job_id}/stream")
+    assert stream_res.status_code == 200
+    assert "text/event-stream" in stream_res.headers.get("content-type", "")
+

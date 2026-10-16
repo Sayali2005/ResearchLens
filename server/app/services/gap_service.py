@@ -3,6 +3,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from pymongo import UpdateOne
 from app.database.connection import get_database, is_database_available
 from app.schemas.gap import ApplicationArea, GapCell, GapMatrix
 from app.services.domain_service import domain_service
@@ -123,8 +124,13 @@ class GapService:
 
                 if exp > 0:
                     ratio = obs / exp
+                    # Poisson Significance Z-Score: Z = (Observed - Expected) / sqrt(Expected)
+                    z_score = round((obs - exp) / (exp ** 0.5), 2)
                 else:
                     ratio = 1.0 if obs > 0 else 0.0
+                    z_score = 0.0
+
+                is_significant_void = bool(z_score < -2.0 and exp >= 5.0)
 
                 # Opportunity formula: min(pop_i, pop_j) * (1 - min(1, ratio))
                 opp = min(p_row, p_col) * (1.0 - min(1.0, ratio))
@@ -143,6 +149,8 @@ class GapService:
                         row_total=r_tot,
                         col_total=c_tot,
                         is_top_opportunity=False,
+                        z_score=z_score,
+                        is_significant_void=is_significant_void,
                     )
                 )
 
@@ -197,8 +205,8 @@ class GapService:
                 )
                 coll.create_index([("domain_id", 1), ("opportunity", -1)])
 
-                for c in cells:
-                    coll.update_one(
+                bulk_ops = [
+                    UpdateOne(
                         {
                             "domain_id": domain_id,
                             "topic_id": c.topic_id,
@@ -207,6 +215,10 @@ class GapService:
                         {"$set": c.model_dump()},
                         upsert=True,
                     )
+                    for c in cells
+                ]
+                if bulk_ops:
+                    coll.bulk_write(bulk_ops, ordered=False)
             except Exception as exc:
                 logger.debug("Failed saving gap cells to MongoDB: %s", exc)
 

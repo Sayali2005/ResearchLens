@@ -4,6 +4,7 @@ import logging
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from pymongo import UpdateOne
 from app.config.settings import settings
 from app.database.connection import get_database, is_database_available
 from app.schemas.paper import Paper
@@ -188,12 +189,16 @@ class PaperService:
                 try:
                     db = get_database()
                     coll = db["papers"]
-                    for p in papers:
-                        coll.update_one(
+                    bulk_ops = [
+                        UpdateOne(
                             {"id": p.id},
                             {"$set": p.model_dump()},
                             upsert=True,
                         )
+                        for p in papers
+                    ]
+                    if bulk_ops:
+                        coll.bulk_write(bulk_ops, ordered=False)
                 except Exception as exc:
                     logger.debug("Failed saving papers to MongoDB: %s", exc)
 

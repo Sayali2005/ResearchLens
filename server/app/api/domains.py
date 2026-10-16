@@ -63,6 +63,101 @@ async def analyze_domain(request: AnalyzeDomainRequest):
         )
 
 
+@router.get("/compare")
+async def compare_domains(
+    d1: str = Query(..., description="First domain slug or name"),
+    d2: str = Query(..., description="Second domain slug or name"),
+):
+    from app.services.domain_service import slugify_domain
+    s1 = slugify_domain(d1)
+    s2 = slugify_domain(d2)
+
+    async def get_domain_summary(slug: str, original_name: str):
+        domain = domain_service.get_domain(slug)
+        if not domain:
+            try:
+                await domain_service.start_analysis(original_name)
+                domain = domain_service.get_domain(slug)
+            except Exception:
+                pass
+
+        if not domain:
+            return {
+                "id": slug,
+                "name": original_name,
+                "status": "pending_or_missing",
+                "total_papers": 0,
+                "topics_count": 0,
+                "topics": [],
+                "cagr_avg": 0.0,
+                "growth_avg": 0.0,
+                "emerging_count": 0,
+                "stable_count": 0,
+                "declining_count": 0,
+                "yearly_trajectory": [],
+                "top_methods": [],
+                "top_datasets": [],
+            }
+
+        trends = domain_service.get_domain_trends(slug) or []
+        emerging = sum(1 for t in trends if t.label == "Emerging")
+        declining = sum(1 for t in trends if t.label == "Declining")
+        stable = sum(1 for t in trends if t.label == "Stable")
+
+        cagr_vals = [t.cagr for t in trends if t.cagr is not None]
+        avg_cagr = round(sum(cagr_vals) / len(cagr_vals), 4) if cagr_vals else 0.0
+
+        growth_vals = [t.gbar for t in trends]
+        avg_growth = round(sum(growth_vals) / len(growth_vals), 4) if growth_vals else 0.0
+
+        yearly_map = {}
+        for t in trends:
+            for yc in t.yearly_counts:
+                yearly_map[yc.year] = yearly_map.get(yc.year, 0) + yc.count
+        yearly_trajectory = [{"year": yr, "count": yearly_map[yr]} for yr in sorted(yearly_map.keys())]
+
+        methods_resp = method_service.analyze_domain_methods(slug)
+        top_methods = [m.model_dump() for m in (methods_resp.methods[:6] if methods_resp else [])]
+        top_datasets = [d.model_dump() for d in (methods_resp.datasets[:6] if methods_resp else [])]
+
+        return {
+            "id": slug,
+            "name": domain.name,
+            "status": "ready",
+            "total_papers": domain.total_papers,
+            "topics_count": len(domain.topics),
+            "topics": [t.name for t in domain.topics[:8]],
+            "cagr_avg": avg_cagr,
+            "growth_avg": avg_growth,
+            "emerging_count": emerging,
+            "stable_count": stable,
+            "declining_count": declining,
+            "yearly_trajectory": yearly_trajectory,
+            "top_methods": top_methods,
+            "top_datasets": top_datasets,
+        }
+
+    data1 = await get_domain_summary(s1, d1)
+    data2 = await get_domain_summary(s2, d2)
+
+    return {
+        "success": True,
+        "data": {
+            "domain_1": data1,
+            "domain_2": data2,
+            "comparison": {
+                "faster_growing": data1["name"] if data1["cagr_avg"] > data2["cagr_avg"] else data2["name"],
+                "higher_volume": data1["name"] if data1["total_papers"] > data2["total_papers"] else data2["name"],
+                "more_emerging_subareas": data1["name"] if data1["emerging_count"] > data2["emerging_count"] else data2["name"],
+            },
+        },
+        "meta": {
+            "fetched_at": datetime.now(timezone.utc).isoformat(),
+            "sources": ["OpenAlex", "Semantic Scholar", "arXiv"],
+        },
+    }
+
+
 @router.get("/{id}/job")
 async def get_domain_job(id: str):
     """Retrieve active or latest analysis job for a domain."""

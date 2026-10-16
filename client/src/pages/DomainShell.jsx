@@ -15,6 +15,7 @@ import {
   Layers,
   ArrowLeft,
   RotateCcw,
+  Radio,
 } from 'lucide-react';
 
 export function DomainShell() {
@@ -29,9 +30,14 @@ export function DomainShell() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [error, setError] = useState(null);
 
+  const eventSourceRef = useRef(null);
   const pollTimerRef = useRef(null);
 
-  const stopPolling = () => {
+  const stopJobTracking = () => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
     if (pollTimerRef.current) {
       clearInterval(pollTimerRef.current);
       pollTimerRef.current = null;
@@ -39,26 +45,73 @@ export function DomainShell() {
   };
 
   const startJobPolling = (jobId) => {
-    stopPolling();
+    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     pollTimerRef.current = setInterval(async () => {
       try {
         const job = await api.getJobStatus(jobId);
         setActiveJob(job);
         if (job.status === 'completed') {
-          stopPolling();
+          stopJobTracking();
           setActiveJob(null);
           await loadOverview();
         } else if (job.status === 'failed') {
-          stopPolling();
+          stopJobTracking();
           setActiveJob(null);
           setError(job.error || job.message || 'Analysis could not be completed.');
           setIsLoading(false);
         }
       } catch (err) {
-        // If poll temporary fails, keep trying unless fatal
         console.warn('Job polling warning:', err);
       }
     }, 1200);
+  };
+
+  const startJobStream = (jobId) => {
+    stopJobTracking();
+
+    // Use SSE (Server-Sent Events) live radar stream
+    if (typeof EventSource !== 'undefined') {
+      try {
+        const streamUrl = api.getJobStreamUrl(jobId);
+        const es = new EventSource(streamUrl);
+        eventSourceRef.current = es;
+
+        es.onmessage = async (event) => {
+          try {
+            const jobData = JSON.parse(event.data);
+            setActiveJob(jobData);
+
+            if (jobData.status === 'completed') {
+              stopJobTracking();
+              setActiveJob(null);
+              await loadOverview();
+            } else if (jobData.status === 'failed') {
+              stopJobTracking();
+              setActiveJob(null);
+              setError(jobData.error || jobData.message || 'Analysis could not be completed.');
+              setIsLoading(false);
+            }
+          } catch (err) {
+            console.warn('Failed parsing SSE stream payload:', err);
+          }
+        };
+
+        es.onerror = () => {
+          // If SSE disconnects, fall back seamlessly to interval polling
+          if (eventSourceRef.current) {
+            eventSourceRef.current.close();
+            eventSourceRef.current = null;
+          }
+          startJobPolling(jobId);
+        };
+        return;
+      } catch (err) {
+        console.warn('SSE stream error, falling back to polling:', err);
+      }
+    }
+
+    // Default to interval polling
+    startJobPolling(jobId);
   };
 
   const loadOverview = async () => {
@@ -73,23 +126,21 @@ export function DomainShell() {
         return true;
       }
     } catch (err) {
-      // If 404, check if there is an active job or trigger one
       try {
         const jobRes = await api.getDomainJob(domainId);
         if (jobRes && jobRes.status === 'processing') {
           setActiveJob(jobRes);
           setIsLoading(false);
-          startJobPolling(jobRes.job_id);
+          startJobStream(jobRes.job_id);
           return false;
         }
 
-        // If no job was running, launch analysis for this domain
         const readableName = domainId.replace(/-/g, ' ');
         const newJob = await api.startAnalysis(readableName);
         if (newJob && newJob.job_id) {
           setActiveJob(newJob);
           setIsLoading(false);
-          startJobPolling(newJob.job_id);
+          startJobStream(newJob.job_id);
           return false;
         }
       } catch (jobErr) {
@@ -102,10 +153,9 @@ export function DomainShell() {
   };
 
   useEffect(() => {
-    stopPolling();
+    stopJobTracking();
     setError(null);
 
-    // If an initial job was passed from navigation
     const initialJobId = location.state?.jobId;
     if (initialJobId) {
       api.getJobStatus(initialJobId).then((job) => {
@@ -114,7 +164,7 @@ export function DomainShell() {
         } else {
           setActiveJob(job);
           setIsLoading(false);
-          startJobPolling(initialJobId);
+          startJobStream(initialJobId);
         }
       }).catch(() => {
         loadOverview();
@@ -123,7 +173,7 @@ export function DomainShell() {
       loadOverview();
     }
 
-    return () => stopPolling();
+    return () => stopJobTracking();
   }, [domainId]);
 
   const handleRefresh = async () => {
@@ -133,7 +183,7 @@ export function DomainShell() {
       const newJob = await api.startAnalysis(readableName);
       if (newJob && newJob.job_id) {
         setActiveJob(newJob);
-        startJobPolling(newJob.job_id);
+        startJobStream(newJob.job_id);
       }
     } catch (err) {
       setError('Refresh failed: ' + err.message);
@@ -146,7 +196,7 @@ export function DomainShell() {
     setShowExportModal(true);
   };
 
-  // 1. In-Progress Analysis Screen
+  // 1. In-Progress Analysis Screen with SSE Live Radar Animation
   if (activeJob && activeJob.status === 'processing') {
     const progressVal = Math.min(Math.max(activeJob.progress || 10, 5), 98);
     const domainDisplayName =
@@ -155,15 +205,17 @@ export function DomainShell() {
       domainId.replace(/-/g, ' ');
 
     return (
-      <div style={{ maxWidth: '820px', margin: '60px auto', padding: '0 24px' }}>
+      <div style={{ maxWidth: '860px', margin: '50px auto', padding: '0 24px' }}>
         <div
           className="panel"
           style={{
             padding: '36px 32px',
             borderRadius: 'var(--radius-lg)',
             boxShadow: 'var(--shadow-hover)',
-            border: '1px solid var(--accent-indigo-border)',
+            border: '1px solid #CBD5E1',
             backgroundColor: '#FFFFFF',
+            position: 'relative',
+            overflow: 'hidden',
           }}
         >
           {/* Top Badge */}
@@ -173,49 +225,123 @@ export function DomainShell() {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '8px',
-                backgroundColor: 'var(--accent-indigo-light)',
-                color: 'var(--accent-indigo)',
+                backgroundColor: '#ECFDF5',
+                color: '#047857',
+                border: '1px solid #A7F3D0',
                 padding: '6px 14px',
                 borderRadius: 'var(--radius-full)',
                 fontSize: '0.825rem',
-                fontWeight: 600,
+                fontWeight: 700,
               }}
             >
-              <Sparkles size={16} />
-              <span>Deterministic Scholarly Engine</span>
+              <Radio size={15} className="spin" color="#059669" />
+              <span>Server-Sent Events (SSE) Live Radar Stream</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-indigo)', fontWeight: 700, fontSize: '1.1rem' }}>
-              <Loader2 size={18} className="spin" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#2563EB', fontWeight: 800, fontSize: '1.25rem' }}>
+              <Loader2 size={18} className="spin" color="#2563EB" />
               <span>{progressVal}%</span>
             </div>
           </div>
 
           {/* Heading */}
-          <h2 style={{ fontSize: '1.65rem', marginBottom: '8px', textTransform: 'capitalize' }}>
+          <h2 style={{ fontSize: '1.75rem', marginBottom: '8px', textTransform: 'capitalize', color: '#0F172A' }}>
             Analyzing {domainDisplayName}
           </h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', marginBottom: '24px' }}>
-            ResearchLens is retrieving live ontology records, calculating publication momentum, and cross-referencing sub-area trajectories.
+          <p style={{ color: '#475569', fontSize: '0.95rem', marginBottom: '24px' }}>
+            ResearchLens is actively mining OpenAlex, arXiv, and Semantic Scholar catalogs &mdash; calculating publication momentum and compound trajectories.
           </p>
+
+          {/* Radar Scanner Animation Graphics */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '24px 0',
+              position: 'relative',
+            }}
+          >
+            <div
+              style={{
+                width: '180px',
+                height: '180px',
+                borderRadius: '50%',
+                border: '1px solid rgba(16, 185, 129, 0.35)',
+                position: 'relative',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: 'rgba(16, 185, 129, 0.03)',
+              }}
+            >
+              {/* Inner concentric ring */}
+              <div
+                style={{
+                  width: '120px',
+                  height: '120px',
+                  borderRadius: '50%',
+                  border: '1px dashed rgba(6, 182, 212, 0.3)',
+                  position: 'absolute',
+                }}
+              />
+              <div
+                style={{
+                  width: '60px',
+                  height: '60px',
+                  borderRadius: '50%',
+                  border: '1px solid rgba(99, 102, 241, 0.4)',
+                  position: 'absolute',
+                }}
+              />
+              {/* Center dot */}
+              <div
+                style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: '#10B981',
+                  boxShadow: '0 0 10px #10B981',
+                  zIndex: 2,
+                }}
+              />
+              {/* Rotating Sweep Arm */}
+              <svg
+                width="180"
+                height="180"
+                viewBox="0 0 180 180"
+                style={{ position: 'absolute', top: 0, left: 0 }}
+                className="radar-sweep-arm"
+              >
+                <defs>
+                  <linearGradient id="sweepGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="rgba(16, 185, 129, 0.45)" />
+                    <stop offset="100%" stopColor="rgba(16, 185, 129, 0)" />
+                  </linearGradient>
+                </defs>
+                <path d="M 90 90 L 180 90 A 90 90 0 0 0 90 0 Z" fill="url(#sweepGrad)" />
+              </svg>
+            </div>
+          </div>
 
           {/* Progress Bar Container */}
           <div
             style={{
               width: '100%',
-              height: '10px',
-              backgroundColor: '#EEF2FF',
+              height: '8px',
+              backgroundColor: 'rgba(255, 255, 255, 0.06)',
               borderRadius: '999px',
               overflow: 'hidden',
-              marginBottom: '16px',
+              marginBottom: '14px',
             }}
           >
             <div
               style={{
                 width: `${progressVal}%`,
                 height: '100%',
-                background: 'linear-gradient(90deg, #4F46E5 0%, #6366F1 50%, #818CF8 100%)',
+                background: 'linear-gradient(90deg, #10B981 0%, #06B6D4 50%, #6366F1 100%)',
                 borderRadius: '999px',
-                transition: 'width 0.4s ease-in-out',
+                transition: 'width 0.3s ease-out',
+                boxShadow: '0 0 12px rgba(16, 185, 129, 0.5)',
               }}
             />
           </div>
@@ -226,28 +352,28 @@ export function DomainShell() {
               display: 'flex',
               alignItems: 'center',
               gap: '10px',
-              padding: '12px 16px',
-              backgroundColor: 'var(--bg-subtle)',
+              padding: '12px 18px',
+              backgroundColor: 'rgba(255, 255, 255, 0.03)',
               border: '1px solid var(--border-color)',
               borderRadius: 'var(--radius-md)',
               fontSize: '0.9rem',
               color: 'var(--text-main)',
-              marginBottom: '32px',
+              marginBottom: '28px',
             }}
           >
-            <Loader2 size={16} className="spin" color="var(--accent-indigo)" />
-            <span style={{ fontWeight: 500 }}>{activeJob.message || 'Processing scholarly data...'}</span>
+            <Loader2 size={16} className="spin" color="#10B981" />
+            <span style={{ fontWeight: 500 }}>{activeJob.message || 'Streaming scholarly analysis...'}</span>
           </div>
 
           {/* 3 Pipeline Stage Milestones */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '28px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', marginBottom: '24px' }}>
             {/* Stage 1 */}
             <div
               style={{
                 padding: '14px',
                 borderRadius: 'var(--radius-md)',
                 border: `1px solid ${progressVal >= 30 ? 'var(--color-success-border)' : 'var(--accent-indigo-border)'}`,
-                backgroundColor: progressVal >= 30 ? 'var(--color-success-bg)' : '#FFFFFF',
+                backgroundColor: progressVal >= 30 ? 'var(--color-success-bg)' : 'rgba(255, 255, 255, 0.02)',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
@@ -269,7 +395,7 @@ export function DomainShell() {
                 padding: '14px',
                 borderRadius: 'var(--radius-md)',
                 border: `1px solid ${progressVal >= 80 ? 'var(--color-success-border)' : progressVal >= 30 ? 'var(--accent-indigo-border)' : 'var(--border-color)'}`,
-                backgroundColor: progressVal >= 80 ? 'var(--color-success-bg)' : '#FFFFFF',
+                backgroundColor: progressVal >= 80 ? 'var(--color-success-bg)' : 'rgba(255, 255, 255, 0.02)',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
@@ -283,7 +409,7 @@ export function DomainShell() {
                 <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>2. Trajectories</span>
               </div>
               <p style={{ fontSize: '0.775rem', color: 'var(--text-secondary)' }}>
-                10-year publication trend calculations
+                10-year publication slope & CAGR
               </p>
             </div>
 
@@ -293,7 +419,7 @@ export function DomainShell() {
                 padding: '14px',
                 borderRadius: 'var(--radius-md)',
                 border: `1px solid ${progressVal >= 95 ? 'var(--color-success-border)' : 'var(--border-color)'}`,
-                backgroundColor: progressVal >= 95 ? 'var(--color-success-bg)' : '#FFFFFF',
+                backgroundColor: progressVal >= 95 ? 'var(--color-success-bg)' : 'rgba(255, 255, 255, 0.02)',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
@@ -314,13 +440,13 @@ export function DomainShell() {
             <button
               className="btn btn-outline btn-sm"
               onClick={() => {
-                stopPolling();
+                stopJobTracking();
                 navigate('/');
               }}
               style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
               <ArrowLeft size={14} />
-              <span>Back to Search</span>
+              <span>Cancel & Return</span>
             </button>
           </div>
         </div>
@@ -328,66 +454,24 @@ export function DomainShell() {
     );
   }
 
-  // 2. Initial Loading Skeleton
-  if (isLoading) {
-    return (
-      <div className="workspace-layout">
-        <aside className="workspace-sidebar" style={{ padding: '20px' }}>
-          <SkeletonCard />
-        </aside>
-        <main className="workspace-content">
-          <div style={{ marginBottom: '24px' }}>
-            <div className="skeleton" style={{ width: '40%', height: '36px', marginBottom: '12px' }} />
-            <div className="skeleton" style={{ width: '60%', height: '18px' }} />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
-            <SkeletonMetric />
-            <SkeletonMetric />
-            <SkeletonMetric />
-          </div>
-          <SkeletonCard />
-        </main>
-      </div>
-    );
-  }
-
-  // 3. Error Fallback
+  // 2. Error State
   if (error) {
     return (
-      <div style={{ maxWidth: '800px', margin: '60px auto', padding: '0 20px' }}>
-        <div
-          className="panel"
-          style={{
-            borderColor: 'var(--color-danger-border)',
-            backgroundColor: 'var(--color-danger-bg)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--color-danger)' }}>
-            <AlertCircle size={22} />
-            <h3 style={{ color: 'var(--color-danger)' }}>Domain Analysis Incomplete</h3>
-          </div>
-          <p style={{ color: 'var(--text-main)', fontSize: '0.9rem' }}>{error}</p>
-          <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={() => {
-                setError(null);
-                const readableName = domainId.replace(/-/g, ' ');
-                api.startAnalysis(readableName).then((newJob) => {
-                  setActiveJob(newJob);
-                  startJobPolling(newJob.job_id);
-                }).catch((e) => setError(e.message));
-              }}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <RotateCcw size={14} />
-              <span>Retry Analysis</span>
+      <div style={{ maxWidth: '640px', margin: '80px auto', padding: '0 24px', textAlign: 'center' }}>
+        <div className="panel" style={{ padding: '36px 24px', borderColor: 'var(--color-danger-border)' }}>
+          <AlertCircle size={44} color="var(--color-danger)" style={{ margin: '0 auto 16px' }} />
+          <h2 style={{ fontSize: '1.4rem', marginBottom: '8px' }}>Analysis Encountered an Issue</h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.925rem', marginBottom: '24px' }}>
+            {error}
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+            <button className="btn btn-outline" onClick={() => navigate('/')}>
+              <ArrowLeft size={15} />
+              <span>Return Home</span>
             </button>
-            <button className="btn btn-outline btn-sm" onClick={() => navigate('/')}>
-              Back to Search
+            <button className="btn btn-primary" onClick={handleRefresh}>
+              <RotateCcw size={15} />
+              <span>Try Again</span>
             </button>
           </div>
         </div>
@@ -395,43 +479,58 @@ export function DomainShell() {
     );
   }
 
-  // 4. Completed Domain Workspace
+  // 3. Initial Loading Skeleton
+  if (isLoading && !domainOverview) {
+    return (
+      <div className="workspace-layout">
+        <div className="workspace-sidebar" style={{ padding: '20px' }}>
+          <div className="skeleton skeleton-title" style={{ width: '80%', height: '28px' }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '20px' }}>
+            {[...Array(7)].map((_, i) => (
+              <div key={i} className="skeleton skeleton-text" style={{ height: '36px' }} />
+            ))}
+          </div>
+        </div>
+        <div className="workspace-content">
+          <div className="skeleton skeleton-title" style={{ width: '40%', height: '32px', marginBottom: '16px' }} />
+          <div className="skeleton skeleton-text" style={{ width: '60%', height: '16px', marginBottom: '28px' }} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '28px' }}>
+            {[...Array(4)].map((_, i) => (
+              <SkeletonMetric key={i} />
+            ))}
+          </div>
+          <SkeletonCard />
+        </div>
+      </div>
+    );
+  }
+
+  // 4. Ready Workspace Shell
   return (
     <div className="workspace-layout">
       <Sidebar
-        domainName={domainOverview?.name || domainId}
+        domainName={domainOverview?.name || domainId.replace(/-/g, ' ')}
         onExport={handleExport}
       />
 
       <main className="workspace-content">
         <DomainHeader
-          domainName={domainOverview?.name || domainId}
-          dataFreshness={domainOverview?.data_freshness}
-          sources={domainOverview?.sources || ['OpenAlex', 'Semantic Scholar', 'arXiv']}
+          domain={domainOverview}
           onRefresh={handleRefresh}
           isRefreshing={isRefreshing}
-          isCached={true}
+          onExport={handleExport}
         />
 
-        {/* Child Views rendered via Outlet */}
-        <Outlet context={{ domainOverview, domainId, handleRefresh }} />
-
-        {/* Disclaimer footer on all domain pages */}
-        <div className="disclaimer-box">
-          <AlertCircle size={18} color="var(--text-muted)" style={{ minWidth: '18px', marginTop: '2px' }} />
-          <div>
-            <strong>Disclaimer:</strong> Gaps are candidate niches evaluated using observed vs. expected publication frequencies and keyword co-occurrence. A low paper volume can indicate an impractical limitation or unviable direction as well as an open research opportunity. Always verify against primary literature.
-          </div>
-        </div>
-
-        {/* Export Modal */}
-        <ExportModal
-          isOpen={showExportModal}
-          onClose={() => setShowExportModal(false)}
-          domainId={domainId}
-          domainName={domainOverview?.name}
-        />
+        <Outlet context={{ domainOverview, domainId }} />
       </main>
+
+      {/* Multi-Format Export Modal */}
+      <ExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        domainId={domainId}
+        domainName={domainOverview?.name || domainId}
+      />
     </div>
   );
 }

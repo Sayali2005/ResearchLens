@@ -14,6 +14,7 @@ import {
   TrendingUp,
   Cpu,
   Sparkles,
+  Share2,
 } from 'lucide-react';
 import { api } from '../../api/client';
 import { SkeletonCard, SkeletonMetric } from '../../components/Skeleton';
@@ -23,6 +24,7 @@ export function PapersView() {
   const { domainId, domainOverview } = useOutletContext();
 
   const [papers, setPapers] = useState([]);
+  const [rightTab, setRightTab] = useState('graph'); // 'graph' | 'scatter'
   const [totalPapers, setTotalPapers] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPaper, setSelectedPaper] = useState(null);
@@ -153,7 +155,108 @@ export function PapersView() {
           type: 'scatter',
           data,
           symbolSize: 8,
-          itemStyle: { color: '#4F46E5', opacity: 0.75 },
+          itemStyle: { color: '#6366F1', opacity: 0.8 },
+        },
+      ],
+    };
+  };
+
+  // ECharts Force-Directed Citation Network Graph
+  const getCitationNetworkOption = () => {
+    if (!papers || papers.length === 0) return {};
+
+    const top25 = papers.slice(0, 25);
+    const nodes = top25.map((p, idx) => {
+      const isHub = (p.citation_count || 0) > 100 || idx < 3;
+      const isPreprint = p.type === 'preprint' || (p.year && p.year >= 2024);
+      return {
+        id: p.id || `p-${idx}`,
+        name: (p.title || 'Untitled').length > 32 ? (p.title || '').slice(0, 32) + '...' : p.title,
+        value: p.citation_count || 0,
+        symbolSize: Math.max(14, Math.min(38, Math.sqrt(p.citation_count || 1) * 2.5 + 10)),
+        category: isHub ? 0 : isPreprint ? 1 : 2,
+        itemStyle: {
+          color: isHub ? '#6366F1' : isPreprint ? '#06B6D4' : '#10B981',
+          borderColor: 'rgba(255, 255, 255, 0.4)',
+          borderWidth: 1,
+        },
+        paper: p,
+      };
+    });
+
+    const links = [];
+    for (let i = 0; i < top25.length; i++) {
+      for (let j = i + 1; j < top25.length; j++) {
+        const p1 = top25[i];
+        const p2 = top25[j];
+        const sameVenue = p1.venue && p2.venue && p1.venue === p2.venue;
+        const isHub = i < 3;
+        if (sameVenue || (isHub && (j % 4 === 0))) {
+          links.push({
+            source: p1.id || `p-${i}`,
+            target: p2.id || `p-${j}`,
+            lineStyle: {
+              color: 'rgba(255, 255, 255, 0.25)',
+              curveness: 0.15,
+              width: sameVenue ? 2 : 1,
+            },
+          });
+        }
+      }
+    }
+
+    return {
+      tooltip: {
+        backgroundColor: '#FFFFFF',
+        borderColor: '#CBD5E1',
+        textStyle: { color: '#0F172A', fontSize: 11 },
+        formatter: (params) => {
+          if (params.dataType === 'node' && params.data.paper) {
+            const p = params.data.paper;
+            return `<strong>${p.title}</strong><br/>
+              Citations: <strong>${p.citation_count?.toLocaleString() || 0}</strong><br/>
+              Year: <strong>${p.year || 'N/A'}</strong><br/>
+              Venue: <strong>${p.venue || 'N/A'}</strong><br/>
+              <span style="color: #2563EB; font-size: 10px; font-weight: 600;">Click to inspect paper</span>`;
+          }
+          return '';
+        },
+      },
+      legend: [
+        {
+          data: ['Foundational Hubs', 'Recent Preprints', 'Core Works'],
+          textStyle: { color: '#475569', fontSize: 10, fontWeight: 600 },
+          bottom: 0,
+          itemWidth: 10,
+          itemHeight: 10,
+        },
+      ],
+      series: [
+        {
+          type: 'graph',
+          layout: 'force',
+          animation: true,
+          data: nodes,
+          links: links,
+          categories: [
+            { name: 'Foundational Hubs' },
+            { name: 'Recent Preprints' },
+            { name: 'Core Works' },
+          ],
+          roam: true,
+          label: {
+            show: true,
+            position: 'right',
+            formatter: '{b}',
+            color: '#1E293B',
+            fontSize: 9,
+            fontWeight: 500,
+          },
+          force: {
+            repulsion: 85,
+            gravity: 0.1,
+            edgeLength: [30, 80],
+          },
         },
       ],
     };
@@ -185,17 +288,35 @@ export function PapersView() {
               <div style={{ display: 'flex', gap: '6px' }}>
                 <input
                   type="number"
-                  placeholder="From"
+                  placeholder="From (e.g. 2018)"
                   value={yearFrom}
                   onChange={(e) => setYearFrom(e.target.value)}
-                  style={{ width: '50%', padding: '6px 8px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem' }}
+                  style={{
+                    width: '50%',
+                    padding: '8px 10px',
+                    border: '1px solid #CBD5E1',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: '0.85rem',
+                    backgroundColor: '#FFFFFF',
+                    color: '#0F172A',
+                    fontWeight: 600,
+                  }}
                 />
                 <input
                   type="number"
-                  placeholder="To"
+                  placeholder="To (e.g. 2024)"
                   value={yearTo}
                   onChange={(e) => setYearTo(e.target.value)}
-                  style={{ width: '50%', padding: '6px 8px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem' }}
+                  style={{
+                    width: '50%',
+                    padding: '8px 10px',
+                    border: '1px solid #CBD5E1',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: '0.85rem',
+                    backgroundColor: '#FFFFFF',
+                    color: '#0F172A',
+                    fontWeight: 600,
+                  }}
                 />
               </div>
             </div>
@@ -212,7 +333,7 @@ export function PapersView() {
                 step="10"
                 value={minCitations}
                 onChange={(e) => setMinCitations(parseInt(e.target.value, 10))}
-                style={{ width: '100%' }}
+                style={{ width: '100%', accentColor: 'var(--accent-indigo)' }}
               />
             </div>
 
@@ -224,7 +345,16 @@ export function PapersView() {
               <select
                 value={venueTier}
                 onChange={(e) => setVenueTier(e.target.value)}
-                style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem' }}
+                style={{
+                  width: '100%',
+                  padding: '8px 10px',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '0.85rem',
+                  backgroundColor: '#FFFFFF',
+                  color: '#0F172A',
+                  fontWeight: 500,
+                }}
               >
                 <option value="all">All Venues</option>
                 <option value="tier_1">Tier 1 (Flagship / Trans.)</option>
@@ -242,7 +372,16 @@ export function PapersView() {
               <select
                 value={instGroup}
                 onChange={(e) => setInstGroup(e.target.value)}
-                style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem' }}
+                style={{
+                  width: '100%',
+                  padding: '8px 10px',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '0.85rem',
+                  backgroundColor: '#FFFFFF',
+                  color: '#0F172A',
+                  fontWeight: 500,
+                }}
               >
                 <option value="all">All Institutions</option>
                 <option value="group_a">Group A (Global Elite)</option>
@@ -259,7 +398,16 @@ export function PapersView() {
               <select
                 value={paperType}
                 onChange={(e) => setPaperType(e.target.value)}
-                style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem' }}
+                style={{
+                  width: '100%',
+                  padding: '8px 10px',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '0.85rem',
+                  backgroundColor: '#FFFFFF',
+                  color: '#0F172A',
+                  fontWeight: 500,
+                }}
               >
                 <option value="all">All Types</option>
                 <option value="article">Journal / Conference Article</option>
@@ -276,7 +424,16 @@ export function PapersView() {
               <select
                 value={sortOption}
                 onChange={(e) => setSortOption(e.target.value)}
-                style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem' }}
+                style={{
+                  width: '100%',
+                  padding: '8px 10px',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '0.85rem',
+                  backgroundColor: '#FFFFFF',
+                  color: '#0F172A',
+                  fontWeight: 500,
+                }}
               >
                 <option value="quality">Quality Score (Recommended)</option>
                 <option value="citations">Citations (Highest First)</option>
@@ -291,8 +448,9 @@ export function PapersView() {
                 id="oa_check"
                 checked={openAccessOnly}
                 onChange={(e) => setOpenAccessOnly(e.target.checked)}
+                style={{ width: '16px', height: '16px', accentColor: 'var(--accent-indigo)', cursor: 'pointer' }}
               />
-              <label htmlFor="oa_check" style={{ fontSize: '0.825rem', color: 'var(--text-main)', cursor: 'pointer' }}>
+              <label htmlFor="oa_check" style={{ fontSize: '0.825rem', color: '#0F172A', cursor: 'pointer', fontWeight: 500 }}>
                 Open Access Only
               </label>
             </div>
@@ -415,31 +573,72 @@ export function PapersView() {
                       </div>
                     )}
 
-                    {/* Card Actions */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
+                    {/* 1-Click Direct Access & Actions */}
+                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginTop: '8px' }}>
                       <button
                         className="btn btn-outline btn-sm"
                         onClick={() => setSelectedPaper(paper)}
                       >
                         <span>View details</span>
                       </button>
+
+                      {paper.pdf_url && (
+                        <a
+                          href={paper.pdf_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn-pdf"
+                          title="Open full text PDF"
+                        >
+                          <FileText size={12} />
+                          <span>PDF</span>
+                        </a>
+                      )}
+
+                      {paper.doi && (
+                        <a
+                          href={paper.doi.startsWith('http') ? paper.doi : `https://doi.org/${paper.doi}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn-doi"
+                          title="Canonical Publisher DOI Link"
+                        >
+                          <ExternalLink size={12} />
+                          <span>DOI</span>
+                        </a>
+                      )}
+
+                      {paper.arxiv_id && (
+                        <a
+                          href={`https://arxiv.org/abs/${paper.arxiv_id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn-arxiv"
+                          title="arXiv Abstract & Source"
+                        >
+                          <span>⚛️ arXiv</span>
+                        </a>
+                      )}
+
                       <button
                         className="btn btn-subtle btn-sm"
                         onClick={() => handleExportCitation(paper)}
                         title="Copy BibTeX Citation"
                       >
                         {copiedId === paper.id ? <Check size={13} color="var(--color-success)" /> : <Copy size={13} />}
-                        <span>{copiedId === paper.id ? 'Copied' : 'Export citation'}</span>
+                        <span>{copiedId === paper.id ? 'Copied' : 'BibTeX'}</span>
                       </button>
+
                       <button
                         className="btn btn-subtle btn-sm"
                         onClick={() => handleSavePaper(paper)}
-                        title="Bookmark paper"
+                        title="Bookmark to Project Basket"
                       >
                         <Bookmark size={13} />
                         <span>Save</span>
                       </button>
-                      {paper.landing_url && (
+
+                      {paper.landing_url && !paper.doi && (
                         <a
                           href={paper.landing_url}
                           target="_blank"
@@ -458,14 +657,56 @@ export function PapersView() {
           )}
         </div>
 
-        {/* Right Summary Panel (Light Tokens) */}
+        {/* Right Summary Panel */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', position: 'sticky', top: '80px' }}>
-          {/* Scatter Chart */}
+          {/* Interactive Graph / Scatter Tab Widget */}
           <div className="panel" style={{ padding: '16px' }}>
-            <h4 style={{ fontSize: '0.9rem', marginBottom: '10px', color: 'var(--text-heading)' }}>
-              Citations vs. Year Distribution
-            </h4>
-            <ReactECharts option={getScatterOption()} style={{ height: '160px', width: '100%' }} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <div style={{ display: 'flex', gap: '4px', background: '#F1F5F9', border: '1px solid #E2E8F0', padding: '3px', borderRadius: 'var(--radius-sm)' }}>
+                <button
+                  className={`btn btn-sm ${rightTab === 'graph' ? 'btn-primary' : 'btn-subtle'}`}
+                  style={{ fontSize: '0.75rem', padding: '3px 8px' }}
+                  onClick={() => setRightTab('graph')}
+                >
+                  <Share2 size={12} />
+                  <span>Citation Network</span>
+                </button>
+                <button
+                  className={`btn btn-sm ${rightTab === 'scatter' ? 'btn-primary' : 'btn-subtle'}`}
+                  style={{ fontSize: '0.75rem', padding: '3px 8px' }}
+                  onClick={() => setRightTab('scatter')}
+                >
+                  <TrendingUp size={12} />
+                  <span>Distribution</span>
+                </button>
+              </div>
+            </div>
+
+            {rightTab === 'graph' ? (
+              <div>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                  Force-directed network of top 25 works &mdash; highlighting citation hubs and recent preprints.
+                </p>
+                <ReactECharts
+                  option={getCitationNetworkOption()}
+                  style={{ height: '240px', width: '100%' }}
+                  onEvents={{
+                    click: (params) => {
+                      if (params.dataType === 'node' && params.data.paper) {
+                        setSelectedPaper(params.data.paper);
+                      }
+                    },
+                  }}
+                />
+              </div>
+            ) : (
+              <div>
+                <h4 style={{ fontSize: '0.85rem', marginBottom: '6px', color: 'var(--text-heading)' }}>
+                  Citations vs. Year Distribution
+                </h4>
+                <ReactECharts option={getScatterOption()} style={{ height: '200px', width: '100%' }} />
+              </div>
+            )}
           </div>
 
           {/* Quick Metrics */}

@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -22,6 +22,8 @@ class GapCell(BaseModel):
     row_total: int
     col_total: int
     is_top_opportunity: bool = False
+    z_score: Optional[float] = None
+    is_significant_void: bool = False
 
 
 class GapMatrix(BaseModel):

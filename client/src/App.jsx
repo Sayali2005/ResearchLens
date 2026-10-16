@@ -4,6 +4,7 @@ import { TopBar } from './components/TopBar';
 import { HomePage } from './pages/HomePage';
 import { SavedPage } from './pages/SavedPage';
 import { MethodologyPage } from './pages/MethodologyPage';
+import { ComparePage } from './pages/ComparePage';
 import { DomainShell } from './pages/DomainShell';
 import { LandscapeView } from './pages/domain/LandscapeView';
 import { TrendsView } from './pages/domain/TrendsView';
@@ -22,6 +23,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/saved" element={<SavedPage />} />
+            <Route path="/compare" element={<ComparePage />} />
             <Route path="/methodology" element={<MethodologyPage />} />
 
             {/* Domain Analysis Shell with 7 sub-views */}

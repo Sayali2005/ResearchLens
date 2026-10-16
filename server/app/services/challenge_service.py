@@ -5,6 +5,7 @@ import math
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
+from pymongo import UpdateOne
 from app.database.connection import get_database, is_database_available
 from app.schemas.insight import ChallengeItem, ChallengesResponse, PaperSummary
 from app.schemas.paper import Paper
@@ -246,8 +247,8 @@ class ChallengeService:
             try:
                 db = get_database()
                 coll = db["challenges"]
-                for c in deduped:
-                    coll.update_one(
+                bulk_ops = [
+                    UpdateOne(
                         {"id": c.id},
                         {
                             "$set": {
@@ -262,6 +263,10 @@ class ChallengeService:
                         },
                         upsert=True,
                     )
+                    for c in deduped
+                ]
+                if bulk_ops:
+                    coll.bulk_write(bulk_ops, ordered=False)
             except Exception as exc:
                 logger.debug("Failed saving challenges to MongoDB: %s", exc)
 

@@ -47,10 +47,11 @@ export function PaperDrawer({ paper, isOpen, onClose, onSave }) {
       <div
         style={{
           width: '100%',
-          maxWidth: '620px',
+          maxWidth: '640px',
           height: '100%',
           backgroundColor: '#FFFFFF',
-          boxShadow: '-4px 0 24px rgba(0, 0, 0, 0.15)',
+          borderLeft: '1px solid #CBD5E1',
+          boxShadow: '-8px 0 32px rgba(0, 0, 0, 0.12)',
           overflowY: 'auto',
           padding: '28px',
           display: 'flex',
@@ -144,29 +145,49 @@ export function PaperDrawer({ paper, isOpen, onClose, onSave }) {
           </div>
         )}
 
-        {/* Actions */}
-        <div style={{ display: 'flex', gap: '10px', marginTop: 'auto', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
-          {paper.landing_url && (
-            <a
-              href={paper.landing_url}
-              target="_blank"
-              rel="noreferrer"
-              className="btn btn-primary btn-sm"
-              style={{ flex: 1 }}
-            >
-              <ExternalLink size={15} />
-              <span>Open Publisher Page</span>
-            </a>
-          )}
+        {/* 1-Click Direct Access & Actions */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: 'auto', paddingTop: '18px', borderTop: '1px solid var(--border-color)', alignItems: 'center' }}>
           {paper.pdf_url && (
             <a
               href={paper.pdf_url}
               target="_blank"
+              rel="noopener noreferrer"
+              className="btn-pdf"
+            >
+              <FileText size={14} />
+              <span>Read PDF</span>
+            </a>
+          )}
+          {paper.doi && (
+            <a
+              href={paper.doi.startsWith('http') ? paper.doi : `https://doi.org/${paper.doi}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-doi"
+            >
+              <ExternalLink size={14} />
+              <span>Publisher DOI</span>
+            </a>
+          )}
+          {paper.arxiv_id && (
+            <a
+              href={`https://arxiv.org/abs/${paper.arxiv_id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-arxiv"
+            >
+              <span>⚛️ arXiv</span>
+            </a>
+          )}
+          {paper.landing_url && !paper.doi && (
+            <a
+              href={paper.landing_url}
+              target="_blank"
               rel="noreferrer"
               className="btn btn-outline btn-sm"
             >
-              <FileText size={15} />
-              <span>PDF</span>
+              <ExternalLink size={14} />
+              <span>Web</span>
             </a>
           )}
           <button
@@ -174,16 +195,18 @@ export function PaperDrawer({ paper, isOpen, onClose, onSave }) {
             onClick={handleCopyBibtex}
             title="Copy BibTeX Citation"
           >
-            {copied ? <Check size={15} color="var(--color-success)" /> : <Copy size={15} />}
+            {copied ? <Check size={14} color="var(--color-success)" /> : <Copy size={14} />}
             <span>{copied ? 'Copied' : 'BibTeX'}</span>
           </button>
           {onSave && (
             <button
               className="btn btn-subtle btn-sm"
               onClick={() => onSave(paper)}
-              title="Bookmark paper"
+              title="Bookmark to Project Basket"
+              style={{ marginLeft: 'auto' }}
             >
               <Bookmark size={15} />
+              <span>Save</span>
             </button>
           )}
         </div>

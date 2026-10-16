@@ -80,6 +80,18 @@ class TrendService:
         last_year_count = yearly_counts_raw.get(end_complete_year, 0)
         total_count = sum(c.count for c in yearly_counts)
 
+        # Compute 3-year Compound Annual Growth Rate (CAGR)
+        count_t = yearly_counts_raw.get(end_complete_year, 0)
+        count_t_minus_3 = yearly_counts_raw.get(end_complete_year - 3, 0)
+        if count_t_minus_3 > 0 and count_t > 0:
+            cagr = round((count_t / count_t_minus_3) ** (1.0 / 3.0) - 1.0, 4)
+        elif count_t_minus_3 == 0 and count_t > 0:
+            cagr = 1.0
+        elif count_t == 0 and count_t_minus_3 > 0:
+            cagr = -1.0
+        else:
+            cagr = 0.0
+
         # Classify label
         emerging_thresh = self.config.get("emerging_growth_threshold", 0.25)
         declining_thresh = self.config.get("declining_growth_threshold", -0.10)
@@ -92,13 +104,28 @@ class TrendService:
         else:
             label = "Stable"
 
+        # Trajectory Momentum Scatter Quadrant
+        # Emerging Stars: High growth, substantial volume
+        # Niche Opportunities: High growth, emerging/niche volume
+        # Established Giants: Moderate/steady growth, high volume
+        # Fading Areas: Plateauing or negative growth
+        effective_growth = cagr if cagr is not None else gbar
+        if effective_growth >= 0.15:
+            quadrant = "Emerging Stars" if total_count >= 2000 else "Niche Opportunities"
+        elif effective_growth <= -0.05 or label == "Declining":
+            quadrant = "Fading Areas"
+        else:
+            quadrant = "Established Giants" if total_count >= 2000 else "Niche Opportunities"
+
         return TopicTrend(
             topic_id=topic_id,
             name=topic_name,
             yearly_counts=yearly_counts,
             growth_rates=growth_rates,
             gbar=gbar,
+            cagr=cagr,
             label=label,
+            quadrant=quadrant,
             total_count=total_count,
             last_complete_year_count=last_year_count,
         )

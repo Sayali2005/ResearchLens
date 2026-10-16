@@ -118,4 +118,15 @@ export const api = {
     const res = await request(`/papers/${encodeURIComponent(paperId)}`);
     return res.data;
   },
+
+  // Domain comparison
+  async compareDomains(domain1, domain2) {
+    const res = await request(`/domains/compare?d1=${encodeURIComponent(domain1)}&d2=${encodeURIComponent(domain2)}`);
+    return res.data;
+  },
+
+  getJobStreamUrl(jobId) {
+    return `${API_BASE}/jobs/${encodeURIComponent(jobId)}/stream`;
+  },
 };
+

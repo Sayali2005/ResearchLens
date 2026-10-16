@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import ReactECharts from 'echarts-for-react';
-import { TrendingUp, Table, BarChart2, Circle, ArrowUpDown, Eye } from 'lucide-react';
+import { TrendingUp, Table, BarChart2, Circle, ArrowUpDown, Eye, Compass, Sparkles } from 'lucide-react';
 import { api } from '../../api/client';
 import { SkeletonTable } from '../../components/Skeleton';
 
@@ -50,21 +50,21 @@ export function TrendsView() {
     }
   };
 
-  // ECharts Line Chart Configuration
+  // ECharts Multi-Line Yearly Volume Chart
   const getLineChartOption = () => {
     if (!trends || trends.length === 0) return {};
 
-    // Collect all years across trends
     const yearsSet = new Set();
     trends.forEach((t) => {
       (t.yearly_counts || []).forEach((y) => yearsSet.add(y.year));
     });
     const sortedYears = Array.from(yearsSet).sort((a, b) => a - b);
 
-    // Pick top 6 sub-areas by last year count
     const topSubareas = [...trends]
-      .sort((a, b) => (b.last_year_count || 0) - (a.last_year_count || 0))
+      .sort((a, b) => (b.last_complete_year_count || b.last_year_count || 0) - (a.last_complete_year_count || a.last_year_count || 0))
       .slice(0, 6);
+
+    const colors = ['#6366F1', '#10B981', '#F59E0B', '#06B6D4', '#EC4899', '#8B5CF6'];
 
     const series = topSubareas.map((t, idx) => {
       const yearCountMap = {};
@@ -73,10 +73,8 @@ export function TrendsView() {
       });
       const data = sortedYears.map((yr) => yearCountMap[yr] || 0);
 
-      const colors = ['#4F46E5', '#16A34A', '#D97706', '#0284C7', '#9333EA', '#E11D48'];
-
       return {
-        name: t.topic_name,
+        name: t.name || t.topic_name,
         type: 'line',
         smooth: true,
         data,
@@ -90,95 +88,134 @@ export function TrendsView() {
       tooltip: {
         trigger: 'axis',
         backgroundColor: '#FFFFFF',
-        borderColor: '#E5E7EB',
-        textStyle: { color: '#111827', fontSize: 12 },
+        borderColor: '#CBD5E1',
+        textStyle: { color: '#0F172A', fontSize: 12 },
       },
       legend: {
-        data: topSubareas.map((t) => t.topic_name),
+        data: topSubareas.map((t) => t.name || t.topic_name),
         bottom: 0,
-        textStyle: { color: '#6B7280', fontSize: 11 },
+        textStyle: { color: '#475569', fontSize: 11, fontWeight: 600 },
       },
       grid: {
-        top: 20,
-        left: '3%',
+        top: 25,
+        left: '5%',
         right: '4%',
         bottom: 50,
         containLabel: true,
       },
       xAxis: {
         type: 'category',
-        data: sortedYears.map(String),
-        axisLine: { lineStyle: { color: '#E5E7EB' } },
-        axisLabel: { color: '#6B7280' },
+        data: sortedYears,
+        axisLine: { lineStyle: { color: '#CBD5E1' } },
+        axisLabel: { color: '#475569', fontWeight: 600 },
       },
       yAxis: {
         type: 'value',
-        axisLine: { show: false },
         splitLine: { lineStyle: { color: '#F1F5F9' } },
-        axisLabel: { color: '#6B7280' },
+        axisLine: { show: false },
+        axisLabel: { color: '#475569', fontWeight: 600 },
       },
       series,
     };
   };
 
-  // ECharts Bubble Chart Configuration
-  const getBubbleChartOption = () => {
+  // Trajectory Momentum Scatter Plot: Log Volume vs. CAGR (4 Quadrants)
+  const getMomentumScatterOption = () => {
     if (!trends || trends.length === 0) return {};
 
-    const bubbleData = trends.map((t) => {
-      const gbarPct = Number((t.gbar * 100).toFixed(1));
-      const count = t.last_year_count || 50;
-      const avgCits = Math.round(count * 0.45); // deterministic citation proxy
-      return [gbarPct, avgCits, count, t.topic_name, t.label];
+    const scatterData = trends.map((t) => {
+      const growthPct = Number(((t.cagr !== undefined && t.cagr !== null ? t.cagr : t.gbar) * 100).toFixed(1));
+      const volume = Math.max(t.total_count || t.last_complete_year_count || 10, 10);
+      const quad = t.quadrant || (growthPct >= 15 ? (volume >= 2000 ? 'Emerging Stars' : 'Niche Opportunities') : (growthPct <= -5 ? 'Fading Areas' : 'Established Giants'));
+      return [
+        volume,
+        growthPct,
+        t.name || t.topic_name,
+        quad,
+        t.last_complete_year_count || t.last_year_count || 0,
+        Number((t.gbar * 100).toFixed(1)),
+        Number(((t.cagr || t.gbar) * 100).toFixed(1)),
+      ];
     });
 
     return {
       tooltip: {
         backgroundColor: '#FFFFFF',
-        borderColor: '#E5E7EB',
+        borderColor: '#CBD5E1',
+        textStyle: { color: '#0F172A', fontSize: 12 },
         formatter: (params) => {
           const d = params.value;
-          return `<strong>${d[3]}</strong><br/>
-            Growth rate: ${d[0]}%<br/>
-            Volume: ${d[2].toLocaleString()} papers<br/>
-            Trajectory: ${d[4]}`;
+          return `
+            <div style="font-family: var(--font-sans); padding: 2px;">
+              <div style="font-weight: 700; color: #0F172A; font-size: 13px; margin-bottom: 4px;">
+                ${d[2]}
+              </div>
+              <div style="color: #475569; font-size: 11px; line-height: 1.6;">
+                Quadrant: <strong style="color: #2563EB;">${d[3]}</strong><br/>
+                3-Year CAGR: <strong style="color: #059669;">${d[6]}%</strong><br/>
+                Compound Slope g&#772;(k): <strong>${d[5]}%</strong><br/>
+                Total Publication Volume: <strong>${d[0].toLocaleString()} papers</strong><br/>
+                Recent Annual Output: <strong>${d[4].toLocaleString()} papers</strong>
+              </div>
+            </div>
+          `;
         },
       },
       grid: {
-        top: 30,
-        left: '5%',
-        right: '5%',
-        bottom: 40,
+        top: 35,
+        left: '6%',
+        right: '6%',
+        bottom: 50,
         containLabel: true,
       },
       xAxis: {
-        name: 'Growth Rate (%)',
-        type: 'value',
+        name: 'Publication Volume (Log Scale)',
+        nameLocation: 'middle',
+        nameGap: 30,
+        type: 'log',
         splitLine: { lineStyle: { color: '#F1F5F9' } },
-        axisLine: { lineStyle: { color: '#E5E7EB' } },
-        axisLabel: { color: '#6B7280' },
+        axisLine: { lineStyle: { color: '#CBD5E1' } },
+        axisLabel: { color: '#475569', fontWeight: 600 },
+        nameTextStyle: { color: '#334155', fontSize: 11, fontWeight: 600 },
       },
       yAxis: {
-        name: 'Estimated Authority Index',
+        name: '3-Year Growth Rate / CAGR (%)',
+        nameLocation: 'middle',
+        nameGap: 40,
         type: 'value',
         splitLine: { lineStyle: { color: '#F1F5F9' } },
-        axisLine: { show: false },
-        axisLabel: { color: '#6B7280' },
+        axisLine: { lineStyle: { color: '#CBD5E1' } },
+        axisLabel: { color: '#475569', fontWeight: 600 },
+        nameTextStyle: { color: '#334155', fontSize: 11, fontWeight: 600 },
       },
       series: [
         {
           type: 'scatter',
-          data: bubbleData,
-          symbolSize: (val) => Math.max(14, Math.min(60, Math.sqrt(val[2]) * 1.5)),
+          data: scatterData,
+          symbolSize: (val) => Math.max(14, Math.min(42, Math.sqrt(val[0]) * 0.45 + 8)),
           itemStyle: {
             color: (params) => {
-              const label = params.value[4];
-              if (label === 'Emerging') return 'rgba(22, 163, 74, 0.65)';
-              if (label === 'Declining') return 'rgba(220, 38, 38, 0.65)';
-              return 'rgba(79, 70, 229, 0.65)';
+              const quad = params.value[3];
+              if (quad === 'Emerging Stars') return '#059669';
+              if (quad === 'Niche Opportunities') return '#D97706';
+              if (quad === 'Fading Areas') return '#DC2626';
+              return '#2563EB';
             },
             borderColor: '#FFFFFF',
             borderWidth: 1.5,
+            shadowBlur: 6,
+            shadowColor: 'rgba(0, 0, 0, 0.15)',
+          },
+          markLine: {
+            silent: true,
+            lineStyle: {
+              type: 'dashed',
+              color: '#94A3B8',
+            },
+            data: [
+              { yAxis: 15, name: 'Growth Threshold (+15%)' },
+              { xAxis: 2000, name: 'Volume Threshold (2k)' },
+            ],
           },
         },
       ],
@@ -188,9 +225,9 @@ export function TrendsView() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
       <div>
-        <h2 style={{ fontSize: '1.45rem', marginBottom: '6px' }}>Publication Growth Trends</h2>
+        <h2 style={{ fontSize: '1.5rem', marginBottom: '6px' }}>Publication Growth Trends & Trajectory Momentum</h2>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
-          Deterministic growth calculations g(k, t) and 3-year mean growth rates g&#772;(k) tracking emerging vs. declining research sub-areas.
+          Exact 10-year publication slope g&#772;(k), 3-year Compound Annual Growth Rate (CAGR), and 4-quadrant momentum mapping across millions of papers.
         </p>
       </div>
 
@@ -198,16 +235,41 @@ export function TrendsView() {
         <SkeletonTable rows={8} cols={5} />
       ) : (
         <>
-          {/* Chart 1: Multi-Line Yearly Volume */}
+          {/* Chart 1: Trajectory Momentum Scatter Plot (4 Quadrants) */}
+          <div className="panel">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '14px', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ fontSize: '1.15rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Compass size={18} color="var(--accent-indigo)" />
+                  <span>Trajectory Momentum Scatter Matrix</span>
+                </h3>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                  X-axis: Total volume (logarithmic) &bull; Y-axis: 3-Year CAGR &bull; Quadrants: Emerging Stars, Established Giants, Niche Opportunities, Fading Areas.
+                </p>
+              </div>
+
+              {/* Quadrant Legend Chips */}
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <span className="badge badge-emerging" style={{ fontSize: '0.75rem' }}>★ Emerging Stars</span>
+                <span className="badge badge-indigo" style={{ fontSize: '0.75rem' }}>■ Established Giants</span>
+                <span className="badge badge-warning" style={{ fontSize: '0.75rem' }}>▲ Niche Opportunities</span>
+                <span className="badge badge-declining" style={{ fontSize: '0.75rem' }}>▼ Fading Areas</span>
+              </div>
+            </div>
+
+            <ReactECharts option={getMomentumScatterOption()} style={{ height: '360px', width: '100%' }} />
+          </div>
+
+          {/* Chart 2: Multi-Line Annual Trajectories */}
           <div className="panel">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <div>
                 <h3 style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <TrendingUp size={18} color="var(--accent-indigo)" />
-                  <span>Annual Publication Trajectories</span>
+                  <TrendingUp size={18} color="var(--accent-emerald)" />
+                  <span>Annual Publication Trajectories (Top Sub-Areas)</span>
                 </h3>
                 <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)' }}>
-                  Papers published per calendar year across top sub-areas.
+                  Historical annual paper distributions over 10 years across the largest sub-domains.
                 </p>
               </div>
 
@@ -221,81 +283,31 @@ export function TrendsView() {
             </div>
 
             {viewModeLine === 'chart' ? (
-              <ReactECharts option={getLineChartOption()} style={{ height: '340px', width: '100%' }} />
+              <ReactECharts option={getLineChartOption()} style={{ height: '320px', width: '100%' }} />
             ) : (
               <div className="table-container">
                 <table>
                   <thead>
                     <tr>
                       <th>Sub-Area</th>
-                      <th>Last Year Volume</th>
-                      <th>Mean Growth (3yr)</th>
-                      <th>Label</th>
+                      <th>Recent Annual Output</th>
+                      <th>Compound Slope g&#772;(k)</th>
+                      <th>3-Year CAGR</th>
+                      <th>Momentum Quadrant</th>
                     </tr>
                   </thead>
                   <tbody>
                     {trends.slice(0, 10).map((t) => (
                       <tr key={t.topic_id}>
-                        <td style={{ fontWeight: 600 }}>{t.topic_name}</td>
-                        <td>{t.last_year_count?.toLocaleString() || 'N/A'}</td>
+                        <td style={{ fontWeight: 600 }}>{t.name || t.topic_name}</td>
+                        <td>{(t.last_complete_year_count || t.last_year_count)?.toLocaleString() || 'N/A'}</td>
                         <td style={{ fontFamily: 'var(--font-mono)' }}>{(t.gbar * 100).toFixed(1)}%</td>
-                        <td>
-                          <span className={`badge ${t.label === 'Emerging' ? 'badge-emerging' : t.label === 'Declining' ? 'badge-declining' : 'badge-stable'}`}>
-                            {t.label}
-                          </span>
+                        <td style={{ fontFamily: 'var(--font-mono)', color: '#10B981', fontWeight: 600 }}>
+                          {t.cagr !== undefined && t.cagr !== null ? `${(t.cagr * 100).toFixed(1)}%` : 'N/A'}
                         </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          {/* Chart 2: Bubble Chart (Growth vs Authority/Volume) */}
-          <div className="panel">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <div>
-                <h3 style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Circle size={18} color="var(--color-success)" />
-                  <span>Sub-Area Momentum Bubble Distribution</span>
-                </h3>
-                <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)' }}>
-                  X-axis: 3-year growth rate &bull; Bubble size: total publication volume &bull; Color: classification label.
-                </p>
-              </div>
-
-              <button
-                className="btn btn-outline btn-sm"
-                onClick={() => setViewModeBubble(viewModeBubble === 'chart' ? 'table' : 'chart')}
-              >
-                <Eye size={14} />
-                <span>{viewModeBubble === 'chart' ? 'View as Table' : 'View as Chart'}</span>
-              </button>
-            </div>
-
-            {viewModeBubble === 'chart' ? (
-              <ReactECharts option={getBubbleChartOption()} style={{ height: '320px', width: '100%' }} />
-            ) : (
-              <div className="table-container">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Sub-Area</th>
-                      <th>Growth (%)</th>
-                      <th>Publication Volume</th>
-                      <th>Trajectory</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {trends.map((t) => (
-                      <tr key={t.topic_id}>
-                        <td style={{ fontWeight: 600 }}>{t.topic_name}</td>
-                        <td style={{ fontFamily: 'var(--font-mono)' }}>{(t.gbar * 100).toFixed(1)}%</td>
-                        <td>{t.last_year_count?.toLocaleString() || 'N/A'}</td>
                         <td>
-                          <span className={`badge ${t.label === 'Emerging' ? 'badge-emerging' : t.label === 'Declining' ? 'badge-declining' : 'badge-stable'}`}>
-                            {t.label}
+                          <span className={`badge ${t.quadrant === 'Emerging Stars' ? 'badge-emerging' : t.quadrant === 'Fading Areas' ? 'badge-declining' : t.quadrant === 'Niche Opportunities' ? 'badge-warning' : 'badge-indigo'}`}>
+                            {t.quadrant || t.label}
                           </span>
                         </td>
                       </tr>
@@ -314,7 +326,7 @@ export function TrendsView() {
                 <span>Deterministic Trend Classifications ({trends.length})</span>
               </h3>
               <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)' }}>
-                Click column headers to sort by growth rate, volume, or topic name.
+                Deterministic CAGR and annual growth rates. Click headers to sort.
               </p>
             </div>
 
@@ -322,56 +334,59 @@ export function TrendsView() {
               <table>
                 <thead>
                   <tr>
-                    <th onClick={() => handleSort('topic_name')} style={{ cursor: 'pointer' }}>
+                    <th onClick={() => handleSort('name')} style={{ cursor: 'pointer' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <span>Sub-Area</span>
                         <ArrowUpDown size={13} />
                       </div>
                     </th>
+                    <th onClick={() => handleSort('cagr')} style={{ cursor: 'pointer' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>3-Year CAGR</span>
+                        <ArrowUpDown size={13} />
+                      </div>
+                    </th>
                     <th onClick={() => handleSort('gbar')} style={{ cursor: 'pointer' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span>Mean Growth (gbar)</span>
+                        <span>Slope g&#772;(k)</span>
                         <ArrowUpDown size={13} />
                       </div>
                     </th>
-                    <th onClick={() => handleSort('label')} style={{ cursor: 'pointer' }}>
+                    <th onClick={() => handleSort('quadrant')} style={{ cursor: 'pointer' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span>Classification</span>
+                        <span>Quadrant</span>
                         <ArrowUpDown size={13} />
                       </div>
                     </th>
-                    <th onClick={() => handleSort('last_year_count')} style={{ cursor: 'pointer' }}>
+                    <th onClick={() => handleSort('total_count')} style={{ cursor: 'pointer' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span>Recent Volume</span>
+                        <span>Total Volume</span>
                         <ArrowUpDown size={13} />
                       </div>
                     </th>
-                    <th>Status Notes</th>
                   </tr>
                 </thead>
                 <tbody>
                   {sortedTrends.map((t) => {
-                    let badge = 'badge-stable';
-                    if (t.label === 'Emerging') badge = 'badge-emerging';
-                    else if (t.label === 'Declining') badge = 'badge-declining';
+                    const quad = t.quadrant || (t.label === 'Emerging' ? 'Emerging Stars' : t.label === 'Declining' ? 'Fading Areas' : 'Established Giants');
+                    let badge = 'badge-indigo';
+                    if (quad === 'Emerging Stars') badge = 'badge-emerging';
+                    else if (quad === 'Niche Opportunities') badge = 'badge-warning';
+                    else if (quad === 'Fading Areas') badge = 'badge-declining';
 
                     return (
                       <tr key={t.topic_id}>
-                        <td style={{ fontWeight: 600 }}>{t.topic_name}</td>
+                        <td style={{ fontWeight: 600 }}>{t.name || t.topic_name}</td>
+                        <td style={{ fontFamily: 'var(--font-mono)', color: '#34D399', fontWeight: 600 }}>
+                          {t.cagr !== undefined && t.cagr !== null ? `${(t.cagr * 100).toFixed(1)}%` : 'N/A'}
+                        </td>
                         <td style={{ fontFamily: 'var(--font-mono)' }}>
                           {(t.gbar * 100).toFixed(1)}%
                         </td>
                         <td>
-                          <span className={`badge ${badge}`}>{t.label}</span>
+                          <span className={`badge ${badge}`}>{quad}</span>
                         </td>
-                        <td>{t.last_year_count ? t.last_year_count.toLocaleString() : 'N/A'}</td>
-                        <td style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                          {t.label === 'Emerging'
-                            ? 'Growth >= 25% with sustained volume'
-                            : t.label === 'Declining'
-                            ? 'Contracting trajectory (<= -10%)'
-                            : 'Stable publication baseline'}
-                        </td>
+                        <td>{t.total_count ? t.total_count.toLocaleString() : (t.last_complete_year_count || 0).toLocaleString()}</td>
                       </tr>
                     );
                   })}

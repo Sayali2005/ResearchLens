@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Compass, Bookmark, BookOpen, Search, Sparkles } from 'lucide-react';
+import { Compass, Bookmark, BookOpen, Search, Sparkles, ArrowLeftRight } from 'lucide-react';
 
 export function TopBar() {
   const location = useLocation();
@@ -39,17 +39,24 @@ export function TopBar() {
       <nav className="top-bar-nav">
         <Link
           to="/"
-          className={`nav-link ${isActive('/') && !location.pathname.startsWith('/domain') && !location.pathname.startsWith('/saved') && !location.pathname.startsWith('/methodology') ? 'active' : ''}`}
+          className={`nav-link ${isActive('/') && !location.pathname.startsWith('/domain') && !location.pathname.startsWith('/saved') && !location.pathname.startsWith('/compare') && !location.pathname.startsWith('/methodology') ? 'active' : ''}`}
         >
           <Search size={16} />
           <span>New Search</span>
+        </Link>
+        <Link
+          to="/compare"
+          className={`nav-link ${isActive('/compare') ? 'active' : ''}`}
+        >
+          <ArrowLeftRight size={16} />
+          <span>Compare</span>
         </Link>
         <Link
           to="/saved"
           className={`nav-link ${isActive('/saved') ? 'active' : ''}`}
         >
           <Bookmark size={16} />
-          <span>Saved</span>
+          <span>Dossier</span>
         </Link>
         <Link
           to="/methodology"

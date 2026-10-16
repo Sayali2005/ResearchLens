@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import ReactECharts from 'echarts-for-react';
-import { Grid3X3, Sparkles, Filter, Eye, Check, X, ExternalLink, Bookmark } from 'lucide-react';
+import { Grid3X3, Sparkles, Filter, Eye, Check, X, ExternalLink, Bookmark, FileText, Copy } from 'lucide-react';
 import { api } from '../../api/client';
 import { SkeletonTable, SkeletonCard } from '../../components/Skeleton';
 import { PaperDrawer } from '../../components/PaperDrawer';
@@ -17,6 +17,17 @@ export function GapMapView() {
   const [cellPapers, setCellPapers] = useState([]);
   const [isLoadingCellPapers, setIsLoadingCellPapers] = useState(false);
   const [selectedPaper, setSelectedPaper] = useState(null);
+  const [copiedBibId, setCopiedBibId] = useState(null);
+  const [savedGapKeys, setSavedGapKeys] = useState(new Set());
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('researchlens_saved_gaps') || '[]');
+      setSavedGapKeys(new Set(saved.map((g) => g.key)));
+    } catch {
+      // fallback
+    }
+  }, []);
 
   useEffect(() => {
     async function loadData() {
@@ -26,9 +37,37 @@ export function GapMapView() {
           api.getDomainGaps(domainId),
           api.getApplicationsConfig(),
         ]);
-        setGapData(gaps);
-        setAllApps(apps || []);
-        setSelectedApps((apps || []).map((a) => a.id));
+
+        // Normalize rows (sub-areas) and columns (applications)
+        const rows = gaps.sub_areas || gaps.rows || [];
+        const columns = gaps.applications || gaps.columns || [];
+        const cells = gaps.cells || [];
+
+        // Build 2D matrix if needed
+        const cellGrid = {};
+        cells.forEach((c) => {
+          if (!cellGrid[c.topic_id]) cellGrid[c.topic_id] = {};
+          cellGrid[c.topic_id][c.application_id] = c;
+        });
+
+        const matrix = rows.map((r) => {
+          return columns.map((c) => {
+            return cellGrid[r.id]?.[c.id] || null;
+          });
+        });
+
+        setGapData({
+          ...gaps,
+          rows,
+          columns,
+          matrix,
+          cells,
+          top_opportunities: gaps.top_opportunities || [],
+        });
+
+        const initialApps = apps || columns || [];
+        setAllApps(initialApps);
+        setSelectedApps(initialApps.map((a) => a.id));
       } catch (err) {
         console.error('Failed to load gap data:', err);
       } finally {
@@ -52,7 +91,6 @@ export function GapMapView() {
     setSelectedCell({ topicId, topicName, appId, appName, ...cellInfo });
     setIsLoadingCellPapers(true);
     try {
-      // Find papers for domain matching this topic and app
       const res = await api.getDomainPapers(domainId, { limit: 15 });
       setCellPapers(res.papers || []);
     } catch (err) {
@@ -62,7 +100,56 @@ export function GapMapView() {
     }
   };
 
-  // ECharts Heatmap Configuration
+  const handleSaveGap = (gap) => {
+    const key = `${gap.topicId || gap.topic_id}_${gap.appId || gap.application_id}`;
+    try {
+      const existing = JSON.parse(localStorage.getItem('researchlens_saved_gaps') || '[]');
+      if (!existing.some((g) => g.key === key)) {
+        const item = {
+          key,
+          domainId,
+          domainName: domainOverview?.name || domainId,
+          topicId: gap.topicId || gap.topic_id,
+          topicName: gap.topicName || gap.topic_name,
+          appId: gap.appId || gap.application_id,
+          appName: gap.appName || gap.application_name,
+          observed: gap.observed,
+          expected: gap.expected,
+          ratio: gap.ratio,
+          opportunity: gap.opportunity,
+          z_score: gap.z_score,
+          is_significant_void: gap.is_significant_void,
+          savedAt: new Date().toISOString(),
+        };
+        existing.push(item);
+        localStorage.setItem('researchlens_saved_gaps', JSON.stringify(existing));
+        setSavedGapKeys(new Set([...savedGapKeys, key]));
+      }
+    } catch (err) {
+      console.error('Failed to save gap:', err);
+    }
+  };
+
+  const handleCopyBibtex = (paper) => {
+    const firstAuthor = paper.authors && paper.authors[0]
+      ? (typeof paper.authors[0] === 'string' ? paper.authors[0] : paper.authors[0].name).split(' ').pop().toLowerCase()
+      : 'author';
+    const year = paper.year || '2024';
+    const key = `${firstAuthor}${year}${paper.id ? paper.id.slice(-4) : 'cite'}`;
+    const authorNames = (paper.authors || []).map((a) => (typeof a === 'string' ? a : a.name)).join(', ');
+    const bibtex = `@article{${key},
+  title={${paper.title}},
+  author={${authorNames}},
+  journal={${paper.venue || 'ResearchLens Corpus'}},
+  year={${year}},
+  doi={${paper.doi || ''}}
+}`;
+    navigator.clipboard.writeText(bibtex);
+    setCopiedBibId(paper.id);
+    setTimeout(() => setCopiedBibId(null), 2000);
+  };
+
+  // ECharts Heatmap Configuration - Deep Gray -> Amber -> Emerald
   const getHeatmapOption = () => {
     if (!gapData || !gapData.matrix || !gapData.rows || !gapData.columns) return {};
 
@@ -71,7 +158,7 @@ export function GapMapView() {
     const rowNames = gapData.rows.map((r) => r.name);
     const colNames = filteredCols.map((c) => c.name);
 
-    // Format data as [colIndex, rowIndex, ratio, observed, expected, opp]
+    // Format data as [colIndex, rowIndex, ratio, observed, expected, opp, z_score, is_void]
     const data = [];
     gapData.matrix.forEach((row, rIdx) => {
       colIndices.forEach((cOrigIdx, cNewIdx) => {
@@ -80,10 +167,12 @@ export function GapMapView() {
           data.push([
             cNewIdx,
             rIdx,
-            Number(cell.ratio.toFixed(2)),
-            cell.observed,
-            Number(cell.expected.toFixed(1)),
-            Number(cell.opportunity.toFixed(2)),
+            Number(cell.ratio?.toFixed(2) || 0),
+            cell.observed || 0,
+            Number(cell.expected?.toFixed(1) || 0),
+            Number(cell.opportunity?.toFixed(2) || 0),
+            cell.z_score !== undefined ? cell.z_score : 0,
+            Boolean(cell.is_significant_void),
           ]);
         }
       });
@@ -93,24 +182,43 @@ export function GapMapView() {
       tooltip: {
         position: 'top',
         backgroundColor: '#FFFFFF',
-        borderColor: '#E5E7EB',
+        borderColor: '#CBD5E1',
+        textStyle: { color: '#0F172A', fontSize: 12 },
         formatter: (params) => {
           const d = params.value;
           const colName = colNames[d[0]];
           const rowName = rowNames[d[1]];
-          return `<strong>${rowName} &times; ${colName}</strong><br/>
-            Observed publications: <strong>${d[3]}</strong><br/>
-            Expected volume: <strong>${d[4]}</strong><br/>
-            Observed/Expected ratio: <strong>${d[2]}</strong><br/>
-            Opportunity score: <strong>${d[5]}</strong><br/>
-            <span style="font-size: 11px; color: #4F46E5;">Click cell to view papers</span>`;
+          const ratio = d[2];
+          const observed = d[3];
+          const expected = d[4];
+          const opp = d[5];
+          const zScore = d[6];
+          const isVoid = d[7];
+          return `
+            <div style="padding: 4px; font-family: var(--font-sans);">
+              <div style="font-weight: 700; color: #0F172A; font-size: 13px; margin-bottom: 6px; border-bottom: 1px solid #E2E8F0; padding-bottom: 4px;">
+                ${rowName} &times; ${colName}
+              </div>
+              <div style="color: #475569; font-size: 11px; line-height: 1.6;">
+                Observed: <strong style="color: #0F172A;">${observed} papers</strong><br/>
+                Expected: <strong style="color: #0F172A;">${expected} papers</strong><br/>
+                Observed/Expected Ratio: <strong style="color: #0F172A;">${ratio}</strong><br/>
+                Opportunity Score: <strong style="color: #D97706;">${(opp * 10).toFixed(1)} / 10</strong><br/>
+                Poisson Significance Z-Score: <strong style="color: ${isVoid ? '#059669' : '#64748B'};">${zScore}</strong>
+                ${isVoid ? '<span style="color: #059669; font-weight: 700; margin-left: 4px;">&bull; Empirical Research Void</span>' : ''}
+              </div>
+              <div style="margin-top: 8px; font-size: 10px; color: #2563EB; font-weight: 600;">
+                Click cell to inspect matching literature &rarr;
+              </div>
+            </div>
+          `;
         },
       },
       grid: {
         top: 20,
         left: '20%',
         right: '4%',
-        bottom: '22%',
+        bottom: '20%',
         containLabel: true,
       },
       xAxis: {
@@ -118,33 +226,48 @@ export function GapMapView() {
         data: colNames,
         axisLabel: {
           rotate: 35,
-          color: '#4B5563',
+          color: '#334155',
           fontSize: 11,
+          fontWeight: 600,
           interval: 0,
         },
-        splitArea: { show: true },
+        splitArea: {
+          show: true,
+          areaStyle: {
+            color: ['#FFFFFF', '#F8FAFC'],
+          },
+        },
+        axisLine: { lineStyle: { color: '#CBD5E1' } },
       },
       yAxis: {
         type: 'category',
         data: rowNames,
         axisLabel: {
-          color: '#374151',
+          color: '#334155',
           fontSize: 11,
+          fontWeight: 600,
         },
-        splitArea: { show: true },
+        splitArea: {
+          show: true,
+          areaStyle: {
+            color: ['#FFFFFF', '#F8FAFC'],
+          },
+        },
+        axisLine: { lineStyle: { color: '#CBD5E1' } },
       },
       visualMap: {
         min: 0,
-        max: 2.0,
+        max: 2.2,
         calculable: true,
         orient: 'horizontal',
         left: 'center',
         bottom: 0,
         inRange: {
-          color: ['#DCFCE7', '#FEF08A', '#FEE2E2'], // Green (Low ratio/gap) -> Yellow -> Red (Saturated)
+          // Color scale: Crisp Gray -> Amber Gap -> Emerald Saturated
+          color: ['#E2E8F0', '#FDE68A', '#059669'],
         },
-        text: ['Saturated', 'High Gap'],
-        textStyle: { color: '#6B7280', fontSize: 11 },
+        text: ['Saturated', 'High Opportunity Gap'],
+        textStyle: { color: '#475569', fontSize: 11, fontWeight: 600 },
       },
       series: [
         {
@@ -153,14 +276,15 @@ export function GapMapView() {
           label: {
             show: true,
             formatter: (p) => p.value[3], // Show observed count inside cell
-            color: '#1F2937',
+            color: '#0F172A',
             fontSize: 10,
+            fontWeight: 700,
           },
           emphasis: {
             itemStyle: {
-              shadowBlur: 10,
-              shadowColor: 'rgba(0, 0, 0, 0.25)',
-              borderColor: '#4F46E5',
+              shadowBlur: 14,
+              shadowColor: 'rgba(0, 0, 0, 0.6)',
+              borderColor: '#6366F1',
               borderWidth: 2,
             },
           },
@@ -181,6 +305,8 @@ export function GapMapView() {
           expected: d[4],
           ratio: d[2],
           opportunity: d[5],
+          z_score: d[6],
+          is_significant_void: d[7],
         });
       }
     }
@@ -189,9 +315,9 @@ export function GapMapView() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
       <div>
-        <h2 style={{ fontSize: '1.45rem', marginBottom: '6px' }}>Cross-Disciplinary Gap Heatmap</h2>
+        <h2 style={{ fontSize: '1.5rem', marginBottom: '6px' }}>Cross-Disciplinary Gap Heatmap</h2>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
-          Statistical cross-matrix of sub-areas vs. 12 real-world application domains. Cells with low observed-to-expected ratios and high statistical support indicate candidate literature gaps.
+          Statistical cross-matrix of sub-areas vs. 12 real-world application domains. Cells with Poisson significance Z-score &lt; -2.0 identify statistically validated empirical research voids.
         </p>
       </div>
 
@@ -206,41 +332,80 @@ export function GapMapView() {
               <span>Top Candidate Opportunities</span>
             </h3>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '12px' }}>
-              {(gapData?.top_opportunities || []).slice(0, 4).map((opp, idx) => (
-                <div
-                  key={idx}
-                  className="panel-subtle"
-                  style={{ cursor: 'pointer', transition: 'border-color 0.15s ease' }}
-                  onClick={() =>
-                    handleCellClick(opp.topic_id, opp.topic_name, opp.application_id, opp.application_name, {
-                      observed: opp.observed,
-                      expected: opp.expected,
-                      ratio: opp.ratio,
-                      opportunity: opp.opportunity,
-                    })
-                  }
-                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent-indigo)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border-color)')}
-                >
-                  <div style={{ fontWeight: 600, fontSize: '0.95rem', color: 'var(--text-heading)' }}>
-                    {opp.topic_name}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '14px' }}>
+              {(gapData?.top_opportunities || []).slice(0, 4).map((opp, idx) => {
+                const key = `${opp.topic_id}_${opp.application_id}`;
+                const isSaved = savedGapKeys.has(key);
+                return (
+                  <div
+                    key={idx}
+                    className="panel-subtle"
+                    style={{
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-md)',
+                      backgroundColor: 'rgba(255, 255, 255, 0.02)',
+                    }}
+                    onClick={() =>
+                      handleCellClick(opp.topic_id, opp.topic_name, opp.application_id, opp.application_name, {
+                        observed: opp.observed,
+                        expected: opp.expected,
+                        ratio: opp.ratio,
+                        opportunity: opp.opportunity,
+                        z_score: opp.z_score,
+                        is_significant_void: opp.is_significant_void,
+                      })
+                    }
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = 'var(--accent-indigo)';
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = 'var(--border-color)';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.95rem', color: 'var(--text-heading)' }}>
+                        {opp.topic_name}
+                      </div>
+                      <button
+                        className="btn btn-subtle btn-sm"
+                        style={{ padding: '4px' }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSaveGap(opp);
+                        }}
+                        title={isSaved ? 'Saved to Dossier' : 'Save to Dossier'}
+                      >
+                        <Bookmark size={14} color={isSaved ? 'var(--color-warning)' : 'var(--text-muted)'} />
+                      </button>
+                    </div>
+
+                    <div style={{ fontSize: '0.825rem', color: 'var(--accent-indigo)', fontWeight: 500, marginTop: '2px' }}>
+                      in {opp.application_name}
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '12px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      <span>Observed: <strong style={{ color: '#FFFFFF' }}>{opp.observed}</strong></span>
+                      <span>Expected: <strong style={{ color: '#FFFFFF' }}>{opp.expected.toFixed(1)}</strong></span>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
+                      <span className="badge badge-warning" style={{ fontSize: '0.725rem' }}>Ratio: {opp.ratio.toFixed(2)}</span>
+                      {opp.z_score !== undefined && (
+                        <span style={{ fontSize: '0.75rem', color: '#10B981', fontWeight: 600 }}>
+                          Z: {opp.z_score}
+                        </span>
+                      )}
+                      <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent-indigo)' }}>
+                        Score: {(opp.opportunity * 10).toFixed(1)}/10
+                      </span>
+                    </div>
                   </div>
-                  <div style={{ fontSize: '0.825rem', color: 'var(--accent-indigo)', fontWeight: 500, marginTop: '2px' }}>
-                    in {opp.application_name}
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                    <span>Observed: <strong>{opp.observed}</strong></span>
-                    <span>Expected: <strong>{opp.expected.toFixed(1)}</strong></span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
-                    <span className="badge badge-warning" style={{ fontSize: '0.725rem' }}>Ratio: {opp.ratio.toFixed(2)}</span>
-                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent-indigo)' }}>
-                      Score: {opp.opportunity.toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -285,8 +450,9 @@ export function GapMapView() {
           <div className="panel">
             {viewMode === 'heatmap' ? (
               <div>
-                <div style={{ fontSize: '0.825rem', color: 'var(--text-muted)', marginBottom: '8px', textAlign: 'right' }}>
-                  Numbers indicate observed publication count. Click cell to open papers.
+                <div style={{ fontSize: '0.825rem', color: 'var(--text-muted)', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>ECharts Statistical Heatmap &bull; Color: Deep Gray (Void) &rarr; Amber (Opportunity) &rarr; Emerald (Saturated)</span>
+                  <span>Click cell to inspect papers in modal</span>
                 </div>
                 <ReactECharts
                   option={getHeatmapOption()}
@@ -299,7 +465,7 @@ export function GapMapView() {
                 <table>
                   <thead>
                     <tr>
-                      <th style={{ position: 'sticky', left: 0, backgroundColor: 'var(--bg-subtle)', zIndex: 10 }}>Sub-Area</th>
+                      <th style={{ position: 'sticky', left: 0, zIndex: 10 }}>Sub-Area</th>
                       {gapData?.columns
                         ?.filter((c) => selectedApps.includes(c.id))
                         .map((col) => (
@@ -310,7 +476,7 @@ export function GapMapView() {
                   <tbody>
                     {gapData?.rows?.map((row, rIdx) => (
                       <tr key={row.id}>
-                        <td style={{ fontWeight: 600, position: 'sticky', left: 0, backgroundColor: '#FFFFFF', zIndex: 5 }}>
+                        <td style={{ fontWeight: 600, position: 'sticky', left: 0, zIndex: 5, backgroundColor: 'rgba(15, 23, 42, 0.95)' }}>
                           {row.name}
                         </td>
                         {gapData?.columns
@@ -324,7 +490,7 @@ export function GapMapView() {
                                 style={{
                                   fontFamily: 'var(--font-mono)',
                                   cursor: 'pointer',
-                                  backgroundColor: cell && cell.ratio < 0.6 ? '#ECFDF5' : 'transparent',
+                                  backgroundColor: cell && cell.ratio < 0.6 ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
                                 }}
                                 onClick={() =>
                                   cell &&
@@ -333,10 +499,12 @@ export function GapMapView() {
                                     expected: cell.expected,
                                     ratio: cell.ratio,
                                     opportunity: cell.opportunity,
+                                    z_score: cell.z_score,
+                                    is_significant_void: cell.is_significant_void,
                                   })
                                 }
                               >
-                                {cell ? `${cell.observed} (E:${cell.expected.toFixed(0)})` : '-'}
+                                {cell ? `${cell.observed} (E:${cell.expected?.toFixed(0)})` : '-'}
                               </td>
                             );
                           })}
@@ -350,7 +518,7 @@ export function GapMapView() {
         </>
       )}
 
-      {/* Selected Cell Papers Modal / Drawer */}
+      {/* Selected Cell Papers Modal */}
       {selectedCell && (
         <div
           style={{
@@ -359,7 +527,8 @@ export function GapMapView() {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.45)',
+            backgroundColor: 'rgba(0, 0, 0, 0.65)',
+            backdropFilter: 'blur(8px)',
             zIndex: 90,
             display: 'flex',
             alignItems: 'center',
@@ -372,27 +541,49 @@ export function GapMapView() {
             className="panel"
             style={{
               width: '100%',
-              maxWidth: '720px',
-              maxHeight: '80vh',
+              maxWidth: '760px',
+              maxHeight: '84vh',
               overflowY: 'auto',
               backgroundColor: '#FFFFFF',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+              border: '1px solid #CBD5E1',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border-color)', paddingBottom: '14px', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid #E2E8F0', paddingBottom: '16px', marginBottom: '18px' }}>
               <div>
-                <span className="badge badge-indigo" style={{ marginBottom: '6px' }}>Cell Papers Explorer</span>
-                <h3 style={{ fontSize: '1.2rem', color: 'var(--text-heading)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                  <span className="badge badge-indigo">Intersection Literature</span>
+                  {selectedCell.is_significant_void && (
+                    <span className="badge badge-emerging">Empirical Void (Z &lt; -2.0)</span>
+                  )}
+                </div>
+                <h3 style={{ fontSize: '1.25rem', color: '#0F172A' }}>
                   {selectedCell.topicName} &times; {selectedCell.appName}
                 </h3>
-                <div style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                  Observed: <strong>{selectedCell.observed}</strong> | Expected: <strong>{selectedCell.expected}</strong> | Ratio: <strong>{selectedCell.ratio}</strong> | Opp: <strong>{selectedCell.opportunity}</strong>
+                <div style={{ fontSize: '0.85rem', color: '#475569', marginTop: '4px' }}>
+                  Observed: <strong style={{ color: '#0F172A' }}>{selectedCell.observed}</strong> |
+                  Expected: <strong style={{ color: '#0F172A' }}>{selectedCell.expected}</strong> |
+                  Ratio: <strong style={{ color: '#0F172A' }}>{selectedCell.ratio}</strong> |
+                  Opportunity Score: <strong style={{ color: '#D97706' }}>{(selectedCell.opportunity * 10).toFixed(1)}/10</strong>
+                  {selectedCell.z_score !== undefined && (
+                    <span> | Poisson Z-Score: <strong style={{ color: '#059669' }}>{selectedCell.z_score}</strong></span>
+                  )}
                 </div>
               </div>
-              <button className="btn btn-subtle btn-sm" onClick={() => setSelectedCell(null)}>
-                <X size={18} />
-              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  className="btn btn-outline btn-sm"
+                  onClick={() => handleSaveGap(selectedCell)}
+                  title="Bookmark to Project Basket"
+                >
+                  <Bookmark size={14} color={savedGapKeys.has(`${selectedCell.topicId}_${selectedCell.appId}`) ? 'var(--color-warning)' : 'currentColor'} />
+                  <span>{savedGapKeys.has(`${selectedCell.topicId}_${selectedCell.appId}`) ? 'Saved' : 'Save Gap'}</span>
+                </button>
+                <button className="btn btn-subtle btn-sm" onClick={() => setSelectedCell(null)}>
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
             {isLoadingCellPapers ? (
@@ -400,29 +591,68 @@ export function GapMapView() {
                 <SkeletonCard />
               </div>
             ) : cellPapers.length === 0 ? (
-              <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                No literature indexed for this specific cell in the local cache.
+              <div style={{ padding: '36px', textAlign: 'center', color: '#64748B' }}>
+                No papers found in this intersection. This highlights a pure empirical void for new research!
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {cellPapers.slice(0, 8).map((p) => (
+                {cellPapers.slice(0, 10).map((p) => (
                   <div
                     key={p.id}
                     className="panel-subtle"
-                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
+                      backgroundColor: '#F8FAFC',
+                      border: '1px solid #E2E8F0',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '12px 16px',
+                    }}
                   >
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{p.title}</div>
-                      <div style={{ fontSize: '0.775rem', color: 'var(--text-muted)' }}>
-                        {p.venue} &bull; {p.year} &bull; {p.citation_count} citations
-                      </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.925rem', color: '#0F172A' }}>{p.title}</div>
+                      <button
+                        className="btn btn-outline btn-sm"
+                        style={{ padding: '4px 8px', fontSize: '0.75rem' }}
+                        onClick={() => setSelectedPaper(p)}
+                      >
+                        Inspect
+                      </button>
                     </div>
-                    <button
-                      className="btn btn-outline btn-sm"
-                      onClick={() => setSelectedPaper(p)}
-                    >
-                      <span>Details</span>
-                    </button>
+
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      <span>{p.venue || 'Corpus'}</span> &bull; <span>{p.year}</span> &bull; <span>{p.citation_count?.toLocaleString() || 0} citations</span>
+                    </div>
+
+                    {/* 1-Click Direct Links */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
+                      {p.pdf_url && (
+                        <a href={p.pdf_url} target="_blank" rel="noopener noreferrer" className="btn-pdf">
+                          <FileText size={11} />
+                          <span>PDF</span>
+                        </a>
+                      )}
+                      {p.doi && (
+                        <a href={p.doi.startsWith('http') ? p.doi : `https://doi.org/${p.doi}`} target="_blank" rel="noopener noreferrer" className="btn-doi">
+                          <ExternalLink size={11} />
+                          <span>DOI</span>
+                        </a>
+                      )}
+                      {p.arxiv_id && (
+                        <a href={`https://arxiv.org/abs/${p.arxiv_id}`} target="_blank" rel="noopener noreferrer" className="btn-arxiv">
+                          <span>⚛️ arXiv</span>
+                        </a>
+                      )}
+                      <button
+                        className="btn btn-subtle btn-sm"
+                        onClick={() => handleCopyBibtex(p)}
+                        title="Copy BibTeX Citation"
+                      >
+                        {copiedBibId === p.id ? <Check size={12} color="var(--color-success)" /> : <Copy size={12} />}
+                        <span>{copiedBibId === p.id ? 'Copied' : 'BibTeX'}</span>
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

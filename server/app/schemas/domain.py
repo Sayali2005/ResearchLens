@@ -42,7 +42,9 @@ class TopicTrend(BaseModel):
     yearly_counts: List[YearlyCount] = Field(default_factory=list)
     growth_rates: List[GrowthRate] = Field(default_factory=list)
     gbar: float = 0.0
+    cagr: Optional[float] = None
     label: str = "Stable"  # Emerging, Stable, Declining
+    quadrant: str = "Established Giants"  # Emerging Stars, Established Giants, Niche Opportunities, Fading Areas
     total_count: int = 0
     last_complete_year_count: int = 0
 
